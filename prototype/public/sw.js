@@ -1,16 +1,11 @@
-// Service Worker for 術後追蹤系統 PWA
-// Cache-first strategy for static assets, network-first for API calls
-
-const CACHE_NAME = 'postop-tracker-v2';
+const CACHE_NAME = 'postop-tracker-v3';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
   '/icon.svg',
   '/favicon.svg',
   '/manifest.json',
 ];
 
-// Install — pre-cache static assets
+// Install — pre-cache only truly static assets (NOT index.html)
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -34,7 +29,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch — cache-first for static, network-first for API
+// Fetch — network-first for HTML/JS/CSS, cache-first for icons
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -52,20 +47,28 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first for static assets
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) {
-        // Revalidate in background
-        fetch(request).then((response) => {
+  // Network-first for navigation (HTML) and hashed assets (JS/CSS)
+  if (request.mode === 'navigate' || url.pathname.startsWith('/assets/')) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
           if (response.ok) {
+            const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, response);
+              cache.put(request, clone);
             });
           }
-        }).catch(() => {});
-        return cached;
-      }
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // Cache-first for truly static assets (icons, manifest)
+  event.respondWith(
+    caches.match(request).then((cached) => {
+      if (cached) return cached;
       return fetch(request).then((response) => {
         if (response.ok) {
           const clone = response.clone();
