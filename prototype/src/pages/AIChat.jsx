@@ -109,7 +109,9 @@ export default function AIChat({ isDemo, userInfo }) {
           <div key={i} className={`chat-bubble ${msg.role === 'user' ? 'user' : 'ai'}`}>
             {msg.role === 'ai' && (
               <div className="bubble-label">
-                {msg.source === 'mock'
+                {msg.source === 'error'
+                  ? '⚠️ 系統通知'
+                  : msg.source === 'mock'
                   ? '📋 自動回覆（離線模式）'
                   : '🤖 AI 衛教助手'}
               </div>

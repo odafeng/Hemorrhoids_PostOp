@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { saveReport as saveLocalReport, getTodayReport, getPOD } from '../utils/storage';
 import * as sb from '../utils/supabaseService';
-import { checkAlerts } from '../utils/alerts';
 
 const bleedingOptions = ['無', '少量', '持續', '血塊'];
 const bowelOptions = ['正常', '困難', '未排'];
@@ -63,20 +62,7 @@ export default function SymptomReport({ onComplete, isDemo, userInfo }) {
       } else {
         const pod = userInfo?.pod || 0;
         await sb.saveReport(userInfo.studyId, pod, report);
-
-        const allReports = await sb.getAllReports(userInfo.studyId);
-        const mapped = allReports.map(r => ({
-          date: r.report_date,
-          pain: r.pain_nrs,
-          bleeding: r.bleeding,
-          bowel: r.bowel,
-          fever: r.fever,
-          wound: r.wound,
-        }));
-        const newAlerts = checkAlerts(mapped);
-        for (const alert of newAlerts) {
-          await sb.createAlert(userInfo.studyId, alert);
-        }
+        // Alerts are now computed server-side by DB trigger fn_check_alerts()
       }
 
       setShowSuccess(true);

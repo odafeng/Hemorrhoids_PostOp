@@ -61,32 +61,42 @@ export async function getPatient(studyId) {
 }
 
 /**
- * Auto-create a patient record if it doesn't exist yet.
- * Called on first login to prevent FK constraint errors.
+ * Ensure patient record exists via server-side Edge Function.
+ * The Edge Function uses service_role to bypass RLS safely.
  */
 export async function ensurePatient(studyId) {
   const existing = await getPatient(studyId);
   if (existing) return existing;
 
-  // Read surgery_date from user metadata (set during registration)
-  const { data: { session } } = await supabase.auth.getSession();
-  const metaSurgeryDate = session?.user?.user_metadata?.surgery_date;
+  try {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    if (!supabaseUrl) {
+      // Demo mode — create a fake patient
+      return { study_id: studyId, surgery_date: new Date().toISOString().split('T')[0] };
+    }
 
-  const { data, error } = await supabase
-    .from('patients')
-    .insert({
-      study_id: studyId,
-      surgery_date: metaSurgeryDate || new Date().toISOString().split('T')[0],
-      study_status: 'active',
-    })
-    .select()
-    .single();
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
 
-  if (error) {
-    console.error('ensurePatient error:', error);
+    const res = await fetch(`${supabaseUrl}/functions/v1/patient-onboard`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+    });
+
+    const result = await res.json();
+    if (!res.ok) {
+      console.error('patient-onboard error:', result.error);
+      return null;
+    }
+    return result.patient;
+  } catch (err) {
+    console.error('ensurePatient error:', err);
     return null;
   }
-  return data;
 }
 
 export function getPODFromDate(surgeryDate) {

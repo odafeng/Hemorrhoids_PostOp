@@ -1,0 +1,124 @@
+// Supabase Edge Function: patient-onboard
+// Creates patient record on first login (replaces client-side ensurePatient)
+// Uses service_role key so RLS doesn't block the insert
+
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
+
+const ALLOWED_ORIGINS = [
+  "https://prototype-zeta-black.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:4173",
+];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("origin") || "";
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
+}
+
+Deno.serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req);
+
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  try {
+    // Verify the caller's JWT
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Create Supabase client with the user's JWT to verify identity
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    // Get the authenticated user
+    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Invalid token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const studyId = user.user_metadata?.study_id;
+    const surgeryDate = user.user_metadata?.surgery_date;
+    const role = user.user_metadata?.role || "patient";
+
+    if (!studyId) {
+      return new Response(JSON.stringify({ error: "No study_id in user metadata" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Use service_role client to bypass RLS for patient insert
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Check if patient already exists
+    const { data: existing } = await adminClient
+      .from("patients")
+      .select("*")
+      .eq("study_id", studyId)
+      .single();
+
+    if (existing) {
+      return new Response(JSON.stringify({ patient: existing }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Create new patient record
+    const { data: patient, error: insertError } = await adminClient
+      .from("patients")
+      .insert({
+        study_id: studyId,
+        surgery_date: surgeryDate || new Date().toISOString().split("T")[0],
+        study_status: "active",
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error("Patient insert error:", insertError);
+      return new Response(JSON.stringify({ error: "Failed to create patient" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ patient }), {
+      status: 201,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("patient-onboard error:", err);
+    return new Response(JSON.stringify({ error: "Internal error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});

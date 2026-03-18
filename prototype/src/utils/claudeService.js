@@ -1,15 +1,19 @@
-// Claude AI Service — calls Edge Function or local proxy
-// Falls back to mockAI if the service is unavailable
-// Returns { text, source } to inform UI about which AI is responding
+// Claude AI Service — calls Supabase Edge Function only
+// In production: API failure shows error, no mock fallback (medical safety)
+// In demo mode: uses mockAI directly
 
 import { getAIResponse as getMockResponse } from './mockAI';
+import { logError } from './errorLogger';
+
+const isProduction = !!import.meta.env.VITE_SUPABASE_URL;
 
 function getAIChatUrl() {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  if (supabaseUrl) {
-    return `${supabaseUrl}/functions/v1/ai-chat`;
+  if (!supabaseUrl) {
+    // No Supabase URL = demo/dev mode, there's no AI endpoint
+    return null;
   }
-  return '/api/ai-chat';
+  return `${supabaseUrl}/functions/v1/ai-chat`;
 }
 
 function getHeaders() {
@@ -23,15 +27,21 @@ function getHeaders() {
 }
 
 /**
- * Get AI response from Claude API via Edge Function or local proxy
+ * Get AI response from Claude API via Supabase Edge Function
  * @param {string} question - User's question
  * @param {object} [options] - Optional settings
  * @param {object} [options.recentSymptoms] - Recent symptom summary for context
  * @param {Array}  [options.conversationHistory] - Previous messages for context
- * @returns {Promise<{text: string, source: 'claude'|'mock'}>} AI response with source indicator
+ * @param {boolean} [options.isDemo] - Whether in demo mode
+ * @returns {Promise<{text: string, source: 'claude'|'mock'|'error'}>}
  */
 export async function getClaudeResponse(question, options = {}) {
-  const { recentSymptoms = null, conversationHistory = [] } = options;
+  const { recentSymptoms = null, conversationHistory = [], isDemo = false } = options;
+
+  // Demo mode: always use mock
+  if (isDemo || !getAIChatUrl()) {
+    return { text: getMockResponse(question), source: 'mock' };
+  }
 
   try {
     const body = { question };
@@ -39,7 +49,6 @@ export async function getClaudeResponse(question, options = {}) {
       body.recentSymptoms = recentSymptoms;
     }
     if (conversationHistory.length > 0) {
-      // Send last 10 exchanges for context (avoid bloating request)
       body.history = conversationHistory.slice(-20);
     }
 
@@ -51,17 +60,25 @@ export async function getClaudeResponse(question, options = {}) {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      if (err.fallback) {
-        console.warn('Claude API unavailable, falling back to mockAI');
-        return { text: getMockResponse(question), source: 'mock' };
-      }
-      throw new Error(err.error || 'AI request failed');
+      logError(new Error(`Claude API ${res.status}: ${err.error}`), { type: 'ai_api_error' });
+
+      // Production: no mock fallback — show honest error
+      return {
+        text: 'AI 衛教暫時不可用，請稍後再試。如有緊急狀況，請聯絡您的醫療團隊。',
+        source: 'error',
+      };
     }
 
     const data = await res.json();
     return { text: data.response, source: 'claude' };
   } catch (err) {
     console.error('Claude service error:', err);
-    return { text: getMockResponse(question), source: 'mock' };
+    logError(err, { type: 'ai_network_error' });
+
+    // Production: no mock fallback
+    return {
+      text: 'AI 衛教暫時不可用，請稍後再試。如有緊急狀況，請聯絡您的醫療團隊。',
+      source: 'error',
+    };
   }
 }
