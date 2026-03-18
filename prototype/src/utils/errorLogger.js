@@ -34,9 +34,13 @@ export async function logError(error, context = {}) {
 }
 
 /**
- * Install global error handlers for unhandled errors and promise rejections
+ * Install global error handlers (idempotent — safe to call multiple times)
  */
+let _installed = false;
 export function installGlobalErrorHandlers() {
+  if (_installed) return;
+  _installed = true;
+
   window.addEventListener('error', (event) => {
     logError(event.error || event.message, { type: 'unhandled_error' });
   });
