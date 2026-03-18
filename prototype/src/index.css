@@ -585,17 +585,14 @@ body {
 
 .quick-questions {
   display: flex;
-  gap: var(--space-sm);
-  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
   padding-bottom: var(--space-sm);
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
 }
 
 .quick-questions::-webkit-scrollbar { display: none; }
 
 .quick-q {
-  flex-shrink: 0;
   padding: var(--space-xs) var(--space-md);
   border: 1px solid var(--border);
   border-radius: var(--radius-full);
@@ -605,7 +602,6 @@ body {
   font-family: var(--font-family);
   cursor: pointer;
   transition: all var(--transition-fast);
-  white-space: nowrap;
 }
 
 .quick-q:hover {
