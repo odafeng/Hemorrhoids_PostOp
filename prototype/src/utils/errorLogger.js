@@ -1,7 +1,6 @@
 // Client-side error logging utility
 // Captures unhandled errors and sends to Supabase for monitoring
-
-import supabase from './supabaseClient';
+// NOTE: Lazy-imports supabaseClient to avoid crashing in CI/test (no env vars)
 
 const LOG_TABLE = 'client_error_logs';
 
@@ -14,18 +13,19 @@ export async function logError(error, context = {}) {
       error_message: error?.message || String(error),
       error_stack: error?.stack || null,
       context: JSON.stringify(context),
-      user_agent: navigator.userAgent,
-      url: window.location.href,
+      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+      url: typeof window !== 'undefined' ? window.location.href : 'unknown',
       timestamp: new Date().toISOString(),
     };
 
-    // Try Supabase first
+    // Lazy import to avoid crash when VITE_SUPABASE_URL is not set (CI/test)
+    const { default: supabase } = await import('./supabaseClient');
+
     const { error: dbError } = await supabase
       .from(LOG_TABLE)
       .insert(entry);
 
     if (dbError) {
-      // Table may not exist yet — fall back to console only
       console.warn('[logError] DB insert failed:', dbError.message);
     }
   } catch {
