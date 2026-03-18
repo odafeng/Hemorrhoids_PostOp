@@ -146,6 +146,8 @@ export async function saveReport(studyId, pod, report) {
     bowel: report.bowel,
     fever: report.fever,
     wound: report.wound,
+    urinary: report.urinary || '正常',
+    continence: report.continence || '正常',
     report_source: 'app',
   };
 
