@@ -4,6 +4,7 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
+// SYNC WITH: api-proxy.mjs (line 45-76)
 const SYSTEM_PROMPT = `你是一位痔瘡手術術後衛教 AI 助手，為剛接受痔瘡手術（hemorrhoidectomy 或 stapled hemorrhoidopexy）的病人提供術後恢復相關的衛教資訊。
 
 ## 你的角色
@@ -70,7 +71,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { question, recentSymptoms } = await req.json();
+    const { question, recentSymptoms, history } = await req.json();
 
     if (!question || typeof question !== "string") {
       return new Response(
@@ -88,6 +89,21 @@ Deno.serve(async (req: Request) => {
       userMessage += `\n\n[病人近期症狀摘要（去識別化）：${JSON.stringify(recentSymptoms)}]`;
     }
 
+    // Build multi-turn messages from conversation history
+    const messages: Array<{role: string, content: string}> = [];
+    if (Array.isArray(history) && history.length > 0) {
+      // Map frontend {role: 'user'|'ai', text} to Claude {role: 'user'|'assistant', content}
+      for (const msg of history.slice(-20)) {
+        if (msg.role === 'user') {
+          messages.push({ role: 'user', content: msg.text });
+        } else if (msg.role === 'ai') {
+          messages.push({ role: 'assistant', content: msg.text });
+        }
+      }
+    }
+    // Add current question
+    messages.push({ role: "user", content: userMessage });
+
     // Call Claude API
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -100,7 +116,7 @@ Deno.serve(async (req: Request) => {
         model: "claude-3-5-haiku-latest",
         max_tokens: 512,
         system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userMessage }],
+        messages,
       }),
     });
 

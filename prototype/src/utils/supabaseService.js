@@ -160,6 +160,17 @@ export async function getAlerts(studyId) {
 }
 
 export async function createAlert(studyId, alert) {
+  // Dedup: skip if an unacknowledged alert of the same type already exists
+  const { data: existing } = await supabase
+    .from('alerts')
+    .select('id')
+    .eq('study_id', studyId)
+    .eq('alert_type', alert.id)
+    .eq('acknowledged', false)
+    .limit(1);
+
+  if (existing && existing.length > 0) return; // already exists
+
   const { error } = await supabase
     .from('alerts')
     .insert({

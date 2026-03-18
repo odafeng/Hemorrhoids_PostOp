@@ -60,21 +60,21 @@ export default function AIChat({ isDemo, userInfo }) {
     setIsTyping(true);
 
     let response;
+    let source = 'mock';
     if (isDemo) {
       // Demo mode — use local keyword matching with simulated delay
       await new Promise(r => setTimeout(r, 600 + Math.random() * 800));
       response = getAIResponse(text);
+      source = 'mock';
     } else {
-      // Supabase mode — use Claude API via proxy
-      try {
-        response = await getClaudeResponse(text.trim());
-      } catch (err) {
-        console.error('Claude error:', err);
-        response = getAIResponse(text); // fallback to mockAI
-      }
+      // Supabase mode — use Claude API via Edge Function with conversation history
+      const history = messages.filter(m => m.role === 'user' || m.role === 'ai');
+      const result = await getClaudeResponse(text.trim(), { conversationHistory: history });
+      response = result.text;
+      source = result.source;
     }
 
-    const aiMsg = { role: 'ai', text: response };
+    const aiMsg = { role: 'ai', text: response, source };
     setMessages(prev => [...prev, aiMsg]);
     setIsTyping(false);
 
@@ -108,7 +108,11 @@ export default function AIChat({ isDemo, userInfo }) {
         {messages.map((msg, i) => (
           <div key={i} className={`chat-bubble ${msg.role === 'user' ? 'user' : 'ai'}`}>
             {msg.role === 'ai' && (
-              <div className="bubble-label">🤖 AI 衛教助手</div>
+              <div className="bubble-label">
+                {msg.source === 'mock'
+                  ? '📋 自動回覆（離線模式）'
+                  : '🤖 AI 衛教助手'}
+              </div>
             )}
             {msg.text}
           </div>

@@ -1,5 +1,5 @@
 // Rule-based alert engine
-// Based on protocol: pain ≥ 8 for 3+ days, persistent bleeding, no bowel 3+ days, fever
+// Based on protocol: pain ≥ 8 for 3+ days, persistent bleeding 2+ consecutive, no bowel 3+ days, fever
 
 export function checkAlerts(reports) {
   const alerts = [];
@@ -7,9 +7,10 @@ export function checkAlerts(reports) {
 
   // Sort by date descending
   const sorted = [...reports].sort((a, b) => b.date.localeCompare(a.date));
+  const recentReports = sorted.slice(0, 7);
+  const latestReport = sorted[0];
 
   // 1. Pain ≥ 8 for 3+ consecutive days
-  const recentReports = sorted.slice(0, 7);
   let consecutiveHighPain = 0;
   for (const r of recentReports) {
     if (r.pain >= 8) {
@@ -28,17 +29,26 @@ export function checkAlerts(reports) {
     });
   }
 
-  // 2. Persistent bleeding
-  const latestReport = sorted[0];
-  if (latestReport && latestReport.bleeding === '持續') {
+  // 2. Persistent bleeding — 連續 2 次回報為「持續」才觸發
+  let consecutivePersistentBleeding = 0;
+  for (const r of recentReports) {
+    if (r.bleeding === '持續') {
+      consecutivePersistentBleeding++;
+    } else {
+      break;
+    }
+  }
+  if (consecutivePersistentBleeding >= 2) {
     alerts.push({
       id: 'persistent_bleeding',
       type: 'danger',
       icon: '🩸',
       title: '持續性出血',
-      message: '您回報了持續性出血，建議儘速聯絡醫療機構評估。',
+      message: `已連續 ${consecutivePersistentBleeding} 次回報持續性出血，建議儘速聯絡醫療機構評估。`,
     });
   }
+
+  // Blood clot — single instance is enough (immediate concern)
   if (latestReport && latestReport.bleeding === '血塊') {
     alerts.push({
       id: 'blood_clot',

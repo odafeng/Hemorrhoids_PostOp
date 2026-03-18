@@ -42,6 +42,7 @@ if (!CLAUDE_API_KEY) {
 // System Prompt — 痔瘡手術術後衛教 AI 助手
 // 對應計畫書第四節 (C) AI 衛教模組
 // =====================================================
+// SYNC WITH: supabase/functions/ai-chat/index.ts
 const SYSTEM_PROMPT = `你是一位痔瘡手術術後衛教 AI 助手，為剛接受痔瘡手術（hemorrhoidectomy 或 stapled hemorrhoidopexy）的病人提供術後恢復相關的衛教資訊。
 
 ## 你的角色

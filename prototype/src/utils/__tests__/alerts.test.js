@@ -66,10 +66,17 @@ describe('checkAlerts', () => {
 
   // === Bleeding Alerts ===
   describe('bleeding alerts', () => {
-    it('triggers persistent bleeding alert for latest report "持續"', () => {
-      const reports = [makeReport({ date: '2026-03-18', bleeding: '持續' })];
+    it('triggers persistent bleeding alert for 2+ consecutive "持續" reports', () => {
+      const dates = makeConsecutiveDates(2);
+      const reports = dates.map(date => makeReport({ date, bleeding: '持續' }));
       const alerts = checkAlerts(reports);
       expect(alerts.some(a => a.id === 'persistent_bleeding')).toBe(true);
+    });
+
+    it('does NOT trigger persistent bleeding for single "持續" report', () => {
+      const reports = [makeReport({ date: '2026-03-18', bleeding: '持續' })];
+      const alerts = checkAlerts(reports);
+      expect(alerts.some(a => a.id === 'persistent_bleeding')).toBe(false);
     });
 
     it('triggers blood clot alert for latest report "血塊"', () => {
