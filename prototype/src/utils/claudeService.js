@@ -67,7 +67,12 @@ export async function getClaudeResponse(question, options = {}) {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      logError(new Error(`Claude API ${res.status}: ${err.error}`), { type: 'ai_api_error' });
+      logError(new Error(`Claude API ${res.status}: ${err.error || 'unknown'}`), {
+        type: 'ai_api_error',
+        severity: 'fatal',
+        component: 'ai_chat',
+        metadata: { status: res.status, endpoint: getAIChatUrl() },
+      });
 
       // Production: no mock fallback — show honest error
       return {
@@ -80,7 +85,12 @@ export async function getClaudeResponse(question, options = {}) {
     return { text: data.response, source: 'claude' };
   } catch (err) {
     console.error('Claude service error:', err);
-    logError(err, { type: 'ai_network_error' });
+    logError(err, {
+      type: 'ai_network_error',
+      severity: 'fatal',
+      component: 'ai_chat',
+      metadata: { endpoint: getAIChatUrl(), message: err?.message },
+    });
 
     // Production: no mock fallback
     return {
