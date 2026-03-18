@@ -4,14 +4,24 @@ import Dashboard from './pages/Dashboard';
 import SymptomReport from './pages/SymptomReport';
 import History from './pages/History';
 import AIChat from './pages/AIChat';
+import UsabilitySurvey from './pages/UsabilitySurvey';
+import ResearcherDashboard from './pages/ResearcherDashboard';
+import ChatReview from './pages/ChatReview';
 import { onAuthStateChange, getSession, getStudyId, getPatient, getPODFromDate, signOut } from './utils/supabaseService';
-import { seedDemoData } from './utils/storage';
+import { seedDemoData, getTodayReport as getLocalTodayReport } from './utils/storage';
+import { startReminderScheduler, stopReminderScheduler, isNotificationsEnabled } from './utils/notifications';
+import * as sb from './utils/supabaseService';
 
-const tabs = [
+const patientTabs = [
   { id: 'dashboard', label: '首頁', icon: '🏠' },
   { id: 'report', label: '回報', icon: '📋' },
   { id: 'history', label: '紀錄', icon: '📊' },
   { id: 'chat', label: 'AI 衛教', icon: '💬' },
+];
+
+const researcherTabs = [
+  { id: 'researcherDashboard', label: '概覽', icon: '📊' },
+  { id: 'chatReview', label: '審核', icon: '🔍' },
 ];
 
 export default function App() {
@@ -48,6 +58,37 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Notification scheduler + SW message handler
+  useEffect(() => {
+    if (authState !== 'loggedIn') return;
+
+    // Build check function based on mode
+    const checkReported = async () => {
+      if (isDemo) {
+        return getLocalTodayReport() !== null;
+      } else if (userInfo?.studyId) {
+        const report = await sb.getTodayReport(userInfo.studyId);
+        return report !== null;
+      }
+      return true; // Default: don't notify
+    };
+
+    startReminderScheduler(checkReported);
+
+    // Listen for SW messages (notification click → navigate to report)
+    const handleSWMessage = (event) => {
+      if (event.data?.type === 'NAVIGATE' && event.data?.tab) {
+        setActiveTab(event.data.tab);
+      }
+    };
+    navigator.serviceWorker?.addEventListener('message', handleSWMessage);
+
+    return () => {
+      stopReminderScheduler();
+      navigator.serviceWorker?.removeEventListener('message', handleSWMessage);
+    };
+  }, [authState, isDemo, userInfo]);
+
   const loadUserInfo = async (session) => {
     const studyId = session?.user?.user_metadata?.study_id;
     const role = session?.user?.user_metadata?.role || 'patient';
@@ -64,16 +105,24 @@ export default function App() {
 
   const handleLogin = (info) => {
     if (info?.demo) {
-      // Demo mode — use LocalStorage
       setIsDemo(true);
-      seedDemoData();
-      setUserInfo({ studyId: 'DEMO-001', role: 'patient', surgeryDate: null, pod: 0 });
+      const role = info.role || 'patient';
+      const isResearcherLogin = role === 'researcher' || role === 'pi';
+      if (!isResearcherLogin) seedDemoData();
+      setUserInfo({
+        studyId: info.studyId || 'DEMO-001',
+        role,
+        surgeryDate: null,
+        pod: 0,
+      });
+      setActiveTab(isResearcherLogin ? 'researcherDashboard' : 'dashboard');
       setAuthState('loggedIn');
     }
     // For Supabase login, onAuthStateChange will handle it
   };
 
   const handleLogout = async () => {
+    stopReminderScheduler();
     if (isDemo) {
       setIsDemo(false);
       setUserInfo(null);
@@ -87,6 +136,14 @@ export default function App() {
     setRefreshKey(k => k + 1);
     setActiveTab('dashboard');
   };
+
+  const handleSurveyComplete = () => {
+    setRefreshKey(k => k + 1);
+    setActiveTab('dashboard');
+  };
+
+  const isResearcherRole = userInfo?.role === 'researcher' || userInfo?.role === 'pi';
+  const tabs = isResearcherRole ? researcherTabs : patientTabs;
 
   const renderPage = () => {
     const commonProps = {
@@ -104,8 +161,16 @@ export default function App() {
         return <History key={refreshKey} {...commonProps} />;
       case 'chat':
         return <AIChat {...commonProps} />;
+      case 'survey':
+        return <UsabilitySurvey onComplete={handleSurveyComplete} {...commonProps} />;
+      case 'researcherDashboard':
+        return <ResearcherDashboard key={refreshKey} onNavigate={setActiveTab} {...commonProps} />;
+      case 'chatReview':
+        return <ChatReview onNavigate={setActiveTab} {...commonProps} />;
       default:
-        return <Dashboard key={refreshKey} onNavigate={setActiveTab} {...commonProps} />;
+        return isResearcherRole
+          ? <ResearcherDashboard key={refreshKey} onNavigate={setActiveTab} {...commonProps} />
+          : <Dashboard key={refreshKey} onNavigate={setActiveTab} {...commonProps} />;
     }
   };
 

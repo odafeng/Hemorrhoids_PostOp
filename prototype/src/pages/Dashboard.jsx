@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { getPOD, getTodayReport, getAllReports, getSurgeryDate } from '../utils/storage';
+import { getPOD, getTodayReport, getAllReports, getSurgeryDate, getSurveyLocal } from '../utils/storage';
 import * as sb from '../utils/supabaseService';
 import { checkAlerts } from '../utils/alerts';
+import NotificationSetup from '../components/NotificationSetup';
 
 export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
   const [loading, setLoading] = useState(!isDemo);
@@ -11,6 +12,7 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
   const [alerts, setAlerts] = useState([]);
   const [surgeryDate, setSurgeryDate] = useState('');
   const [adherence, setAdherence] = useState(0);
+  const [surveyDone, setSurveyDone] = useState(false);
 
   useEffect(() => {
     if (isDemo) {
@@ -28,6 +30,7 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
       setAlerts(checkAlerts(mapped));
       const totalDays = Math.max(1, p + 1);
       setAdherence(Math.round((all.length / totalDays) * 100));
+      setSurveyDone(getSurveyLocal() !== null);
     } else {
       loadSupabaseData();
     }
@@ -62,6 +65,11 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
 
       const totalDays = Math.max(1, p + 1);
       setAdherence(Math.round((all.length / totalDays) * 100));
+
+      try {
+        const survey = await sb.getSurvey(userInfo.studyId);
+        setSurveyDone(!!survey);
+      } catch { /* ignore */ }
     } catch (err) {
       console.error('Dashboard load error:', err);
     } finally {
@@ -129,6 +137,36 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
         <div className="card-value" style={{ fontSize: '4rem', letterSpacing: '-2px' }}>{pod}</div>
         <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', marginTop: '4px' }}>POD {pod}</div>
       </div>
+
+      {/* Survey prompt — show when POD >= 14 */}
+      {pod >= 14 && !surveyDone && (
+        <div className="card delay-1" style={{ borderColor: 'var(--accent)', borderWidth: '1.5px' }}>
+          <div className="card-header">
+            <div className="card-icon accent">📝</div>
+            <div>
+              <div className="card-title">系統可用性問卷</div>
+              <span className="status-badge pending">● 待填寫</span>
+            </div>
+          </div>
+          <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--space-md)' }}>
+            您已使用系統超過 14 天，請花 1 分鐘填寫可用性問卷，幫助我們改善系統。
+          </p>
+          <button className="btn btn-primary" onClick={() => onNavigate('survey')}>
+            填寫問卷
+          </button>
+        </div>
+      )}
+      {pod >= 14 && surveyDone && (
+        <div className="card delay-1" style={{ opacity: 0.7 }}>
+          <div className="card-header" style={{ marginBottom: 0 }}>
+            <div className="card-icon success">📝</div>
+            <div>
+              <div className="card-title">系統可用性問卷</div>
+              <span className="status-badge completed">✓ 已完成</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Alerts */}
       {alerts.map(alert => (
@@ -219,6 +257,9 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
           <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => onNavigate('chat')}>💬 AI 衛教</button>
         </div>
       </div>
+
+      {/* Notification Settings */}
+      <NotificationSetup />
     </div>
   );
 }

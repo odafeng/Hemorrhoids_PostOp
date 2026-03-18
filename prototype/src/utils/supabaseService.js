@@ -186,6 +186,17 @@ export async function saveSurvey(studyId, pod, survey) {
   if (error) throw error;
 }
 
+export async function getSurvey(studyId) {
+  const { data, error } = await supabase
+    .from('usability_surveys')
+    .select('*')
+    .eq('study_id', studyId)
+    .order('created_at', { ascending: false })
+    .maybeSingle();
+  if (error) return null;
+  return data;
+}
+
 // =====================
 // Healthcare Utilization
 // =====================
@@ -197,4 +208,57 @@ export async function getUtilization(studyId) {
     .order('event_date', { ascending: false });
   if (error) return [];
   return data || [];
+}
+
+// =====================
+// Researcher Queries
+// =====================
+export async function getAllPatients() {
+  const { data, error } = await supabase
+    .from('patients')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) return [];
+  return data || [];
+}
+
+export async function getAdherenceSummary() {
+  const { data, error } = await supabase
+    .from('v_adherence_summary')
+    .select('*');
+  if (error) return [];
+  return data || [];
+}
+
+export async function getAllAlertsForResearcher() {
+  const { data, error } = await supabase
+    .from('alerts')
+    .select('*')
+    .order('triggered_at', { ascending: false });
+  if (error) return [];
+  return data || [];
+}
+
+export async function getUnreviewedChats() {
+  const { data, error } = await supabase
+    .from('ai_chat_logs')
+    .select('*')
+    .eq('reviewed', false)
+    .order('created_at', { ascending: false });
+  if (error) return [];
+  return data || [];
+}
+
+export async function reviewChat(chatId, result, notes, reviewedBy) {
+  const { error } = await supabase
+    .from('ai_chat_logs')
+    .update({
+      reviewed: true,
+      review_result: result,
+      review_notes: notes || null,
+      reviewed_by: reviewedBy || 'researcher',
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq('id', chatId);
+  if (error) throw error;
 }

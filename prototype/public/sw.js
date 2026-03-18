@@ -1,7 +1,7 @@
 // Service Worker for 術後追蹤系統 PWA
 // Cache-first strategy for static assets, network-first for API calls
 
-const CACHE_NAME = 'postop-tracker-v1';
+const CACHE_NAME = 'postop-tracker-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -75,6 +75,71 @@ self.addEventListener('fetch', (event) => {
         }
         return response;
       });
+    })
+  );
+});
+
+// =====================================================
+// Push Notification — receive server push (future use)
+// =====================================================
+self.addEventListener('push', (event) => {
+  const defaults = {
+    title: '術後追蹤提醒 🏥',
+    body: '您今日尚未填寫症狀回報，請花 30 秒完成填寫。',
+    icon: '/icon.svg',
+    badge: '/favicon.svg',
+    tag: 'daily-reminder',
+    data: { action: 'open-report' },
+  };
+
+  let payload = defaults;
+  if (event.data) {
+    try {
+      const data = event.data.json();
+      payload = { ...defaults, ...data };
+    } catch {
+      payload.body = event.data.text() || defaults.body;
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: payload.icon,
+      badge: payload.badge,
+      tag: payload.tag,
+      renotify: true,
+      data: payload.data,
+      actions: [
+        { action: 'report', title: '立即填寫' },
+        { action: 'dismiss', title: '稍後' },
+      ],
+    })
+  );
+});
+
+// =====================================================
+// Notification Click — navigate to symptom report
+// =====================================================
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  // Dismiss action — do nothing
+  if (event.action === 'dismiss') return;
+
+  // Open or focus the app, navigate to report page
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      // If app is already open, focus it and navigate
+      for (const client of clients) {
+        if (client.url.includes(self.location.origin)) {
+          client.focus();
+          client.postMessage({ type: 'NAVIGATE', tab: 'report' });
+          return;
+        }
+      }
+      // Otherwise open a new window
+      return self.clients.openWindow('/?tab=report');
     })
   );
 });

@@ -16,6 +16,7 @@ vi.mock('../../utils/storage', () => ({
     { date: '2026-03-18', pain: 4, bleeding: '少量', bowel: '正常', fever: false, wound: '無異常', pod: 4 },
   ]),
   getSurgeryDate: vi.fn().mockReturnValue('2026-03-13'),
+  getSurveyLocal: vi.fn().mockReturnValue(null),
 }));
 
 // Mock supabaseService to prevent network calls
@@ -24,6 +25,7 @@ vi.mock('../../utils/supabaseService', () => ({
   getTodayReport: vi.fn(),
   getAllReports: vi.fn(),
   getPODFromDate: vi.fn(),
+  getSurvey: vi.fn().mockResolvedValue(null),
 }));
 
 describe('Dashboard Page (Demo Mode)', () => {

@@ -134,7 +134,7 @@ export default function Login({ onLogin }) {
         )}
       </div>
 
-      {/* Demo Mode Button */}
+      {/* Demo Mode Buttons */}
       <div style={{ marginTop: 'var(--space-lg)', textAlign: 'center' }}>
         <button
           className="btn btn-secondary"
@@ -142,6 +142,13 @@ export default function Login({ onLogin }) {
           style={{ maxWidth: '280px', margin: '0 auto' }}
         >
           🧪 Demo 模式（無需登入）
+        </button>
+        <button
+          className="btn btn-secondary"
+          onClick={() => onLogin({ demo: true, studyId: 'RESEARCHER', role: 'researcher' })}
+          style={{ maxWidth: '280px', margin: 'var(--space-sm) auto 0', background: 'var(--accent-dim)', borderColor: 'var(--accent)' }}
+        >
+          🔬 研究者 Demo
         </button>
         <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 'var(--space-sm)' }}>
           Demo 模式使用本機資料，不連線 Supabase
