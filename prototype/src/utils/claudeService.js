@@ -22,18 +22,13 @@ async function getHeaders() {
   if (anonKey) {
     headers['apikey'] = anonKey; // Required for Supabase routing
 
-    // Send user JWT for auth (not anon key)
-    try {
-      const { default: supabase } = await import('./supabaseClient');
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      } else {
-        headers['Authorization'] = `Bearer ${anonKey}`;
-      }
-    } catch {
-      headers['Authorization'] = `Bearer ${anonKey}`;
+    // Send user JWT — no anon fallback in production
+    const { default: supabase } = await import('./supabaseClient');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      throw new Error('Not authenticated');
     }
+    headers['Authorization'] = `Bearer ${session.access_token}`;
   }
   return headers;
 }
