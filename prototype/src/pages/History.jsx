@@ -1,42 +1,7 @@
-import { useState, useEffect } from 'react';
-import { getAllReports as getLocalReports } from '../utils/storage';
-import * as sb from '../utils/supabaseService';
+import { useHistoryData } from '../utils/hooks';
 
 export default function History({ isDemo, userInfo }) {
-  const [loading, setLoading] = useState(!isDemo);
-  const [allReports, setAllReports] = useState([]);
-
-  useEffect(() => {
-    if (isDemo) {
-      const reports = getLocalReports().sort((a, b) => b.date.localeCompare(a.date));
-      setAllReports(reports);
-    } else {
-      loadSupabase();
-    }
-  }, [isDemo, userInfo]);
-
-  const loadSupabase = async () => {
-    if (!userInfo?.studyId) return;
-    setLoading(true);
-    try {
-      const reports = await sb.getAllReports(userInfo.studyId);
-      // Normalize field names
-      const mapped = reports.map(r => ({
-        date: r.report_date,
-        pod: r.pod,
-        pain: r.pain_nrs,
-        bleeding: r.bleeding,
-        bowel: r.bowel,
-        fever: r.fever,
-        wound: r.wound,
-      }));
-      setAllReports(mapped);
-    } catch (err) {
-      console.error('History load error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: allReports = [], isLoading, error } = useHistoryData(isDemo, userInfo);
 
   const getPainColor = (pain) => {
     if (pain <= 3) return 'var(--success)';
@@ -87,7 +52,7 @@ export default function History({ isDemo, userInfo }) {
     );
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
         <p style={{ color: 'var(--text-secondary)', animation: 'pulse 1s infinite' }}>載入中...</p>

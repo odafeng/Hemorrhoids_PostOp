@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { TestQueryWrapper } from '../../test-utils';
 import History from '../History';
 
 // Mock storage for demo mode
@@ -28,40 +29,43 @@ describe('History Page (Demo Mode)', () => {
     userInfo: { studyId: 'DEMO-001', pod: 5, role: 'patient' },
   };
 
-  it('renders page title', () => {
-    render(<History {...defaultProps} />);
-    expect(screen.getByText('歷史紀錄')).toBeInTheDocument();
+  it('renders page title', async () => {
+    render(<History {...defaultProps} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => expect(screen.getByText('歷史紀錄')).toBeInTheDocument());
   });
 
-  it('displays total report count', () => {
-    render(<History {...defaultProps} />);
-    expect(screen.getByText(/已完成 5 次回報/)).toBeInTheDocument();
+  it('displays total report count', async () => {
+    render(<History {...defaultProps} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => expect(screen.getByText(/已完成 5 次回報/)).toBeInTheDocument());
   });
 
-  it('renders pain trend chart title', () => {
-    render(<History {...defaultProps} />);
-    expect(screen.getByText(/疼痛趨勢/)).toBeInTheDocument();
+  it('renders pain trend chart title', async () => {
+    render(<History {...defaultProps} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => expect(screen.getByText(/疼痛趨勢/)).toBeInTheDocument());
   });
 
-  it('renders timeline items for each report', () => {
-    render(<History {...defaultProps} />);
-    expect(screen.getByText(/POD 0/)).toBeInTheDocument();
+  it('renders timeline items for each report', async () => {
+    render(<History {...defaultProps} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => expect(screen.getByText(/POD 0/)).toBeInTheDocument());
     expect(screen.getByText(/POD 4/)).toBeInTheDocument();
   });
 
-  it('shows pain values in timeline (using getAllByText for duplicates)', () => {
-    render(<History {...defaultProps} />);
-    // 7/10 appears twice (POD 0 and POD 3)
-    const sevens = screen.getAllByText('7/10');
-    expect(sevens.length).toBe(2);
+  it('shows pain values in timeline (using getAllByText for duplicates)', async () => {
+    render(<History {...defaultProps} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => {
+      const sevens = screen.getAllByText('7/10');
+      expect(sevens.length).toBe(2);
+    });
     expect(screen.getByText('4/10')).toBeInTheDocument();
     expect(screen.getByText('9/10')).toBeInTheDocument();
   });
 
-  it('renders SVG chart for pain trend', () => {
-    const { container } = render(<History {...defaultProps} />);
-    const svg = container.querySelector('svg');
-    expect(svg).toBeInTheDocument();
+  it('renders SVG chart for pain trend', async () => {
+    const { container } = render(<History {...defaultProps} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => {
+      const svg = container.querySelector('svg');
+      expect(svg).toBeInTheDocument();
+    });
   });
 });
 
@@ -70,8 +74,8 @@ describe('History Page (Empty State)', () => {
     const storage = await import('../../utils/storage');
     storage.__setMockReports([]);
 
-    render(<History isDemo={true} userInfo={{ studyId: 'DEMO-001' }} />);
-    expect(screen.getByText('尚無回報紀錄')).toBeInTheDocument();
+    render(<History isDemo={true} userInfo={{ studyId: 'DEMO-001' }} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => expect(screen.getByText('尚無回報紀錄')).toBeInTheDocument());
 
     // Restore
     storage.__setMockReports([

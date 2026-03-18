@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { TestQueryWrapper } from '../../test-utils';
 import Dashboard from '../Dashboard';
 
 // Mock storage for demo mode
@@ -36,62 +37,62 @@ describe('Dashboard Page (Demo Mode)', () => {
     onLogout: vi.fn(),
   };
 
-  it('renders page title', () => {
-    render(<Dashboard {...defaultProps} />);
-    expect(screen.getByText('術後追蹤')).toBeInTheDocument();
+  it('renders page title', async () => {
+    render(<Dashboard {...defaultProps} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => expect(screen.getByText('術後追蹤')).toBeInTheDocument());
   });
 
-  it('displays surgery date', () => {
-    render(<Dashboard {...defaultProps} />);
-    expect(screen.getByText(/手術日期/)).toBeInTheDocument();
+  it('displays surgery date', async () => {
+    render(<Dashboard {...defaultProps} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => expect(screen.getByText(/手術日期/)).toBeInTheDocument());
     expect(screen.getByText(/2026-03-13/)).toBeInTheDocument();
   });
 
-  it('shows Demo badge', () => {
-    render(<Dashboard {...defaultProps} />);
-    expect(screen.getByText(/Demo/)).toBeInTheDocument();
+  it('shows Demo badge', async () => {
+    render(<Dashboard {...defaultProps} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => expect(screen.getByText(/Demo/)).toBeInTheDocument());
   });
 
-  it('displays POD counter', () => {
-    render(<Dashboard {...defaultProps} />);
-    expect(screen.getByText('術後天數')).toBeInTheDocument();
+  it('displays POD counter', async () => {
+    render(<Dashboard {...defaultProps} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => expect(screen.getByText('術後天數')).toBeInTheDocument());
     expect(screen.getByText('5')).toBeInTheDocument();
     expect(screen.getByText('POD 5')).toBeInTheDocument();
   });
 
-  it('shows today report as completed', () => {
-    render(<Dashboard {...defaultProps} />);
-    expect(screen.getByText('今日回報')).toBeInTheDocument();
+  it('shows today report as completed', async () => {
+    render(<Dashboard {...defaultProps} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => expect(screen.getByText('今日回報')).toBeInTheDocument());
     expect(screen.getByText('✓ 已完成')).toBeInTheDocument();
   });
 
-  it('displays today symptom values', () => {
-    render(<Dashboard {...defaultProps} />);
-    expect(screen.getByText('4/10')).toBeInTheDocument(); // today pain
-    expect(screen.getByText('少量')).toBeInTheDocument(); // bleeding
-    expect(screen.getByText('正常')).toBeInTheDocument(); // bowel
+  it('displays today symptom values', async () => {
+    render(<Dashboard {...defaultProps} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => expect(screen.getByText('4/10')).toBeInTheDocument());
+    expect(screen.getByText('少量')).toBeInTheDocument();
+    expect(screen.getByText('正常')).toBeInTheDocument();
   });
 
-  it('shows adherence rate', () => {
-    render(<Dashboard {...defaultProps} />);
-    expect(screen.getByText('回報率')).toBeInTheDocument();
+  it('shows adherence rate', async () => {
+    render(<Dashboard {...defaultProps} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => expect(screen.getByText('回報率')).toBeInTheDocument());
   });
 
-  it('renders logout button', () => {
-    render(<Dashboard {...defaultProps} />);
-    expect(screen.getByText('登出')).toBeInTheDocument();
+  it('renders logout button', async () => {
+    render(<Dashboard {...defaultProps} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => expect(screen.getByText('登出')).toBeInTheDocument());
   });
 
-  it('renders quick action buttons', () => {
-    render(<Dashboard {...defaultProps} />);
-    expect(screen.getByText(/查看紀錄/)).toBeInTheDocument();
+  it('renders quick action buttons', async () => {
+    render(<Dashboard {...defaultProps} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => expect(screen.getByText(/查看紀錄/)).toBeInTheDocument());
     expect(screen.getByText(/AI 衛教/)).toBeInTheDocument();
   });
 
-  it('calls onLogout when logout button is clicked', () => {
-    render(<Dashboard {...defaultProps} />);
-    const logoutBtn = screen.getByText('登出');
-    logoutBtn.click();
+  it('calls onLogout when logout button is clicked', async () => {
+    render(<Dashboard {...defaultProps} />, { wrapper: TestQueryWrapper });
+    await waitFor(() => expect(screen.getByText('登出')).toBeInTheDocument());
+    screen.getByText('登出').click();
     expect(defaultProps.onLogout).toHaveBeenCalled();
   });
 });

@@ -1,81 +1,9 @@
-import { useState, useEffect } from 'react';
-import { getPOD, getTodayReport, getAllReports, getSurgeryDate, getSurveyLocal } from '../utils/storage';
-import * as sb from '../utils/supabaseService';
+import { useDashboardData } from '../utils/hooks';
 import { checkAlerts } from '../utils/alerts';
 import NotificationSetup from '../components/NotificationSetup';
 
 export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
-  const [loading, setLoading] = useState(!isDemo);
-  const [pod, setPod] = useState(0);
-  const [todayReport, setTodayReport] = useState(null);
-  const [allReports, setAllReports] = useState([]);
-  const [alerts, setAlerts] = useState([]);
-  const [surgeryDate, setSurgeryDate] = useState('');
-  const [adherence, setAdherence] = useState(0);
-  const [surveyDone, setSurveyDone] = useState(false);
-
-  useEffect(() => {
-    if (isDemo) {
-      // Demo mode — use LocalStorage
-      const p = getPOD();
-      const today = getTodayReport();
-      const all = getAllReports();
-      const sd = getSurgeryDate();
-      setPod(p);
-      setTodayReport(today);
-      setAllReports(all);
-      setSurgeryDate(sd);
-      // Remap for alert check
-      const mapped = all.map(r => ({ ...r, pain: r.pain ?? r.pain_nrs }));
-      setAlerts(checkAlerts(mapped));
-      const totalDays = Math.max(1, p + 1);
-      setAdherence(Math.round((all.length / totalDays) * 100));
-      setSurveyDone(getSurveyLocal() !== null);
-    } else {
-      loadSupabaseData();
-    }
-  }, [isDemo, userInfo]);
-
-  const loadSupabaseData = async () => {
-    if (!userInfo?.studyId) return;
-    setLoading(true);
-    try {
-      const patient = await sb.getPatient(userInfo.studyId);
-      const sd = patient?.surgery_date || new Date().toISOString().split('T')[0];
-      const p = sb.getPODFromDate(sd);
-      setSurgeryDate(sd);
-      setPod(p);
-
-      const all = await sb.getAllReports(userInfo.studyId);
-      setAllReports(all);
-
-      const today = await sb.getTodayReport(userInfo.studyId);
-      setTodayReport(today);
-
-      // Map Supabase field names for alert check
-      const mapped = all.map(r => ({
-        date: r.report_date,
-        pain: r.pain_nrs,
-        bleeding: r.bleeding,
-        bowel: r.bowel,
-        fever: r.fever,
-        wound: r.wound,
-      }));
-      setAlerts(checkAlerts(mapped));
-
-      const totalDays = Math.max(1, p + 1);
-      setAdherence(Math.round((all.length / totalDays) * 100));
-
-      try {
-        const survey = await sb.getSurvey(userInfo.studyId);
-        setSurveyDone(!!survey);
-      } catch { /* ignore */ }
-    } catch (err) {
-      console.error('Dashboard load error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, isLoading, error } = useDashboardData(isDemo, userInfo);
 
   const getPainColor = (pain) => {
     if (pain <= 3) return 'var(--success)';
@@ -83,17 +11,27 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
     return 'var(--danger)';
   };
 
-  const latestPain = allReports.length > 0
-    ? (allReports[0]?.pain_nrs ?? allReports[0]?.pain ?? null)
-    : null;
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
         <p style={{ color: 'var(--text-secondary)', animation: 'pulse 1s infinite' }}>載入中...</p>
       </div>
     );
   }
+
+  if (error) {
+    return (
+      <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <p style={{ color: 'var(--danger)' }}>載入失敗：{error.message}</p>
+      </div>
+    );
+  }
+
+  const { pod, surgeryDate, todayReport, allReports, alerts, adherence, surveyDone } = data;
+
+  const latestPain = allReports.length > 0
+    ? (allReports[0]?.pain_nrs ?? allReports[0]?.pain ?? null)
+    : null;
 
   // Normalize today report pain field
   const todayPain = todayReport?.pain_nrs ?? todayReport?.pain ?? null;

@@ -28,3 +28,7 @@ dist-ssr
 # Supabase CLI temp
 supabase/.temp/
 .vercel
+
+# Playwright
+test-results/
+playwright-report/
