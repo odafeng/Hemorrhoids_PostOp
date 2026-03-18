@@ -1,9 +1,0 @@
-{
-  "buildCommand": "cd prototype && npm run build",
-  "outputDirectory": "prototype/dist",
-  "installCommand": "cd prototype && npm install",
-  "framework": "vite",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
-}
