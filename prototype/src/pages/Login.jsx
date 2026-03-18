@@ -9,6 +9,7 @@ export default function Login({ onLogin }) {
   const [password, setPassword] = useState('');
   const [studyId, setStudyId] = useState('');
   const [inviteCode, setInviteCode] = useState('');
+  const [surgeryDate, setSurgeryDate] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -25,6 +26,7 @@ export default function Login({ onLogin }) {
         await signUp(email, password, {
           role: 'patient',
           study_id: studyId,
+          surgery_date: surgeryDate || new Date().toISOString().split('T')[0],
         });
         setError('');
         setMode('login');
@@ -88,6 +90,17 @@ export default function Login({ onLogin }) {
                     placeholder="請輸入研究團隊提供的邀請碼"
                     value={inviteCode}
                     onChange={e => setInviteCode(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">手術日期</label>
+                  <input
+                    className="chat-input"
+                    style={{ width: '100%' }}
+                    type="date"
+                    value={surgeryDate}
+                    onChange={e => setSurgeryDate(e.target.value)}
                     required
                   />
                 </div>

@@ -68,12 +68,15 @@ export async function ensurePatient(studyId) {
   const existing = await getPatient(studyId);
   if (existing) return existing;
 
-  // Create minimal patient record with today as surgery_date
+  // Read surgery_date from user metadata (set during registration)
+  const { data: { session } } = await supabase.auth.getSession();
+  const metaSurgeryDate = session?.user?.user_metadata?.surgery_date;
+
   const { data, error } = await supabase
     .from('patients')
     .insert({
       study_id: studyId,
-      surgery_date: new Date().toISOString().split('T')[0],
+      surgery_date: metaSurgeryDate || new Date().toISOString().split('T')[0],
       study_status: 'active',
     })
     .select()
