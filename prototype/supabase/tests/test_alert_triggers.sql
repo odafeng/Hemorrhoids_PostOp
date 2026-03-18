@@ -7,11 +7,27 @@
 
 BEGIN;
 
--- ── Cleanup (delete from all FK-dependent tables first) ──
-DELETE FROM ai_chat_logs WHERE study_id LIKE 'TEST-%';
-DELETE FROM usability_surveys WHERE study_id LIKE 'TEST-%';
-DELETE FROM push_subscriptions WHERE study_id LIKE 'TEST-%';
-DELETE FROM pending_notifications WHERE study_id LIKE 'TEST-%';
+-- ── Cleanup (safe: handles tables that may not exist) ──
+DO $$ BEGIN
+  EXECUTE 'DELETE FROM ai_chat_logs WHERE study_id LIKE ''TEST-%''';
+  EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+DO $$ BEGIN
+  EXECUTE 'DELETE FROM usability_surveys WHERE study_id LIKE ''TEST-%''';
+  EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+DO $$ BEGIN
+  EXECUTE 'DELETE FROM push_subscriptions WHERE study_id LIKE ''TEST-%''';
+  EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+DO $$ BEGIN
+  EXECUTE 'DELETE FROM pending_notifications WHERE study_id LIKE ''TEST-%''';
+  EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
+DO $$ BEGIN
+  EXECUTE 'DELETE FROM healthcare_utilization WHERE study_id LIKE ''TEST-%''';
+  EXCEPTION WHEN undefined_table THEN NULL;
+END $$;
 DELETE FROM alerts WHERE study_id LIKE 'TEST-%';
 DELETE FROM symptom_reports WHERE study_id LIKE 'TEST-%';
 DELETE FROM patients WHERE study_id LIKE 'TEST-%';
