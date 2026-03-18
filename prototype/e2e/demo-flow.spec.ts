@@ -38,11 +38,17 @@ test.describe('Demo Mode — Critical Path', () => {
     // Select bleeding: 少量
     await page.getByRole('button', { name: '少量' }).click();
 
-    // Select bowel: 正常
-    await page.getByRole('button', { name: '正常' }).click();
+    // Select bowel: 正常 (first 正常 button in bowel section)
+    await page.getByRole('button', { name: '正常' }).nth(0).click();
+
+    // Select continence: 正常 (second 正常 group)
+    await page.getByRole('button', { name: '正常' }).nth(1).click();
 
     // Select fever: 否
     await page.getByRole('button', { name: '否' }).click();
+
+    // Select urinary: 正常 (third 正常 group)
+    await page.getByRole('button', { name: '正常' }).nth(2).click();
 
     // Select wound: 無異常
     await page.getByRole('button', { name: '無異常' }).click();

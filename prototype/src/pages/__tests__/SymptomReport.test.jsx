@@ -41,9 +41,10 @@ describe('SymptomReport Page', () => {
     expect(slider.value).toBe('3'); // default
   });
 
-  it('renders all bleeding options', () => {
+  it('renders all bleeding options with descriptions', () => {
     render(<SymptomReport {...defaultProps} />);
     expect(screen.getByText('無')).toBeInTheDocument();
+    expect(screen.getByText('無任何出血')).toBeInTheDocument();
     expect(screen.getByText('少量')).toBeInTheDocument();
     expect(screen.getByText('持續')).toBeInTheDocument();
     expect(screen.getByText('血塊')).toBeInTheDocument();
@@ -51,8 +52,9 @@ describe('SymptomReport Page', () => {
 
   it('renders all bowel options', () => {
     render(<SymptomReport {...defaultProps} />);
-    expect(screen.getByText('正常')).toBeInTheDocument();
-    expect(screen.getByText('困難')).toBeInTheDocument();
+    // Use getAllByText for '正常' since it appears in bowel, urinary and continence
+    const normals = screen.getAllByText('正常');
+    expect(normals.length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('未排')).toBeInTheDocument();
   });
 
@@ -70,33 +72,48 @@ describe('SymptomReport Page', () => {
     expect(screen.getByText('分泌物')).toBeInTheDocument();
   });
 
+  it('renders urinary and continence fields', () => {
+    render(<SymptomReport {...defaultProps} />);
+    expect(screen.getByText('排尿狀況')).toBeInTheDocument();
+    expect(screen.getByText('肛門控制')).toBeInTheDocument();
+    expect(screen.getByText('完全尿不出來')).toBeInTheDocument();
+    expect(screen.getByText('偶爾滲漏')).toBeInTheDocument();
+    expect(screen.getByText('無法控制')).toBeInTheDocument();
+  });
+
   it('submit button is disabled when required fields are not selected', () => {
     render(<SymptomReport {...defaultProps} />);
     const submit = screen.getByText('提交回報');
     expect(submit).toBeDisabled();
   });
 
+  // Helper: fill all required fields
+  const fillAllFields = () => {
+    // Bleeding: click the button containing "少量" label
+    const bleedingBtn = screen.getByText('少量').closest('button');
+    fireEvent.click(bleedingBtn);
+    // Bowel: click 正常 in bowel section (first one)
+    const bowelButtons = screen.getAllByText('正常');
+    fireEvent.click(bowelButtons[0]); // bowel is first
+    // Continence: click the button containing "正常" for continence
+    // continence's 正常 is the second one
+    fireEvent.click(bowelButtons[1]);
+    // Urinary: click the button containing "正常" for urinary (third)
+    fireEvent.click(bowelButtons[2]);
+    // Wound
+    fireEvent.click(screen.getByText('無異常'));
+  };
+
   it('submit button becomes enabled after selecting all required fields', () => {
     render(<SymptomReport {...defaultProps} />);
-
-    // Select bleeding option
-    fireEvent.click(screen.getByText('少量'));
-    // Select bowel option
-    fireEvent.click(screen.getByText('正常'));
-    // Select wound option
-    fireEvent.click(screen.getByText('無異常'));
-
+    fillAllFields();
     const submit = screen.getByText('提交回報');
     expect(submit).not.toBeDisabled();
   });
 
   it('shows success overlay after submission in demo mode', async () => {
     render(<SymptomReport {...defaultProps} />);
-
-    // Fill form
-    fireEvent.click(screen.getByText('少量'));
-    fireEvent.click(screen.getByText('正常'));
-    fireEvent.click(screen.getByText('無異常'));
+    fillAllFields();
 
     // Submit
     fireEvent.click(screen.getByText('提交回報'));

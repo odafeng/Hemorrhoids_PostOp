@@ -1,5 +1,6 @@
 // Rule-based alert engine
-// Based on protocol: pain ≥ 8 for 3+ days, persistent bleeding 2+ consecutive, no bowel 3+ days, fever
+// Based on protocol: pain ≥ 8 for 3+ days, ascending pain 3+ days,
+// persistent bleeding 2+ consecutive, no bowel 3+ days, fever, urinary retention
 
 export function checkAlerts(reports) {
   const alerts = [];
@@ -29,7 +30,23 @@ export function checkAlerts(reports) {
     });
   }
 
-  // 2. Persistent bleeding — 連續 2 次回報為「持續」才觸發
+  // 2. Ascending pain — 3+ consecutive days of increasing pain (越來越痛)
+  if (recentReports.length >= 3) {
+    // Check most recent 3 days in chronological order
+    const recent3 = recentReports.slice(0, 3).reverse(); // oldest → newest
+    const isAscending = recent3[1].pain > recent3[0].pain && recent3[2].pain > recent3[1].pain;
+    if (isAscending) {
+      alerts.push({
+        id: 'ascending_pain',
+        type: 'warning',
+        icon: '📈',
+        title: '疼痛逐日上升',
+        message: `近 3 天疼痛持續上升（${recent3.map(r => r.pain).join(' → ')}），一般術後疼痛應逐日遞減，建議聯絡醫療機構評估。`,
+      });
+    }
+  }
+
+  // 3. Persistent bleeding — 連續 2 次回報為「持續」才觸發
   let consecutivePersistentBleeding = 0;
   for (const r of recentReports) {
     if (r.bleeding === '持續') {
@@ -44,7 +61,7 @@ export function checkAlerts(reports) {
       type: 'danger',
       icon: '🩸',
       title: '持續性出血',
-      message: `已連續 ${consecutivePersistentBleeding} 次回報持續性出血，建議儘速聯絡醫療機構評估。`,
+      message: `已連續 ${consecutivePersistentBleeding} 次回報持續性出血（排便後滴血、馬桶水變色），建議儘速聯絡醫療機構評估。`,
     });
   }
 
@@ -59,7 +76,7 @@ export function checkAlerts(reports) {
     });
   }
 
-  // 3. No bowel movement for 3+ days
+  // 4. No bowel movement for 3+ days
   let consecutiveNoBowel = 0;
   for (const r of recentReports) {
     if (r.bowel === '未排') {
@@ -78,7 +95,7 @@ export function checkAlerts(reports) {
     });
   }
 
-  // 4. Fever
+  // 5. Fever
   if (latestReport && latestReport.fever) {
     alerts.push({
       id: 'fever',
@@ -87,6 +104,70 @@ export function checkAlerts(reports) {
       title: '發燒',
       message: '您回報了發燒症狀，建議儘速聯絡醫療機構評估。',
     });
+  }
+
+  // 6. Urinary retention (完全尿不出來) — immediate concern
+  if (latestReport && latestReport.urinary === '尿不出來') {
+    alerts.push({
+      id: 'urinary_retention',
+      type: 'danger',
+      icon: '🚨',
+      title: '完全尿不出來',
+      message: '您回報了完全尿不出來，這是術後需要立即處理的狀況，建議儘速聯絡醫療機構。',
+    });
+  }
+
+  // Urinary difficulty — warning if consecutive
+  if (latestReport && latestReport.urinary === '困難') {
+    let consecutiveUrinaryDifficulty = 0;
+    for (const r of recentReports) {
+      if (r.urinary === '困難' || r.urinary === '尿不出來') {
+        consecutiveUrinaryDifficulty++;
+      } else {
+        break;
+      }
+    }
+    if (consecutiveUrinaryDifficulty >= 2) {
+      alerts.push({
+        id: 'urinary_difficulty',
+        type: 'warning',
+        icon: '⚠️',
+        title: '排尿困難',
+        message: `已連續 ${consecutiveUrinaryDifficulty} 天排尿困難，建議聯絡醫療機構評估。`,
+      });
+    }
+  }
+
+  // 8. Incontinence (肛門失禁)
+  if (latestReport && latestReport.continence === '失禁') {
+    alerts.push({
+      id: 'incontinence',
+      type: 'danger',
+      icon: '🚨',
+      title: '肛門失禁',
+      message: '您回報了無法控制排便，建議儘速聯絡醫療機構評估。',
+    });
+  }
+
+  // Soiling (滲便) — warning if consecutive 2+ days
+  if (latestReport && latestReport.continence === '滲便') {
+    let consecutiveSoiling = 0;
+    for (const r of recentReports) {
+      if (r.continence === '滲便' || r.continence === '失禁') {
+        consecutiveSoiling++;
+      } else {
+        break;
+      }
+    }
+    if (consecutiveSoiling >= 2) {
+      alerts.push({
+        id: 'soiling',
+        type: 'warning',
+        icon: '⚠️',
+        title: '持續滲便',
+        message: `已連續 ${consecutiveSoiling} 天出現滲便，建議聯絡醫療機構評估。`,
+      });
+    }
   }
 
   return alerts;

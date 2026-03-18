@@ -81,7 +81,7 @@ export default function History({ isDemo, userInfo }) {
       {renderChart()}
       <div className="timeline">
         {allReports.map((report, idx) => {
-          const hasAlert = report.pain >= 8 || report.bleeding === '持續' || report.bleeding === '血塊' || report.fever;
+          const hasAlert = report.pain >= 8 || report.bleeding === '持續' || report.bleeding === '血塊' || report.fever || report.urinary === '尿不出來' || report.continence === '失禁';
           return (
             <div key={report.date} className={`timeline-item ${hasAlert ? 'alert' : ''}`} style={{ animationDelay: `${idx * 0.05}s` }}>
               <div className="timeline-date">POD {report.pod ?? '—'} ・ {report.date}</div>
@@ -96,6 +96,10 @@ export default function History({ isDemo, userInfo }) {
                   <span className={`symptom-value ${report.fever ? 'danger' : 'success'}`}>{report.fever ? '是' : '否'}</span></div>
                 <div className="symptom-row"><span className="symptom-name">傷口</span>
                   <span className={`symptom-value ${report.wound === '無異常' ? 'success' : 'warning'}`}>{report.wound}</span></div>
+                <div className="symptom-row"><span className="symptom-name">排尿</span>
+                  <span className={`symptom-value ${report.urinary === '尿不出來' ? 'danger' : report.urinary === '困難' ? 'warning' : 'success'}`}>{report.urinary || '—'}</span></div>
+                <div className="symptom-row"><span className="symptom-name">肛門控制</span>
+                  <span className={`symptom-value ${report.continence === '失禁' ? 'danger' : report.continence === '滲便' ? 'warning' : 'success'}`}>{report.continence || '—'}</span></div>
               </div>
             </div>
           );
