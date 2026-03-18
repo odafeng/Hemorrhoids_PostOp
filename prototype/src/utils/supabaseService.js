@@ -124,7 +124,7 @@ export async function getAllReports(studyId) {
 }
 
 export async function getTodayReport(studyId) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local timezone
   const { data, error } = await supabase
     .from('symptom_reports')
     .select('*')
@@ -136,7 +136,7 @@ export async function getTodayReport(studyId) {
 }
 
 export async function saveReport(studyId, pod, report) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local timezone
   const payload = {
     study_id: studyId,
     report_date: today,
