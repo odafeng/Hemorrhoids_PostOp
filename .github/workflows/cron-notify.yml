@@ -1,0 +1,21 @@
+name: Daily Adherence Check
+
+on:
+  schedule:
+    # 12:00 and 20:00 UTC+8 = 04:00 and 12:00 UTC
+    - cron: '0 4 * * *'   # 12:00 noon Taiwan time
+    - cron: '0 12 * * *'  # 20:00 evening Taiwan time
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger adherence check
+        run: |
+          curl -X POST \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/check-adherence" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --fail-with-body \
+            -w "\nHTTP %{http_code}\n"

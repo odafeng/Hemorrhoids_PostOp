@@ -10,13 +10,14 @@ import ResearcherDashboard from './pages/ResearcherDashboard';
 import ChatReview from './pages/ChatReview';
 import OfflineBanner from './components/OfflineBanner';
 import IOSInstallPrompt from './components/IOSInstallPrompt';
-import { installGlobalErrorHandlers } from './utils/errorLogger';
+import { installGlobalErrorHandlers, initSentry } from './utils/errorLogger';
 import { onAuthStateChange, getSession, getStudyId, getPatient, ensurePatient, getPODFromDate, signOut } from './utils/supabaseService';
 import { seedDemoData, getTodayReport as getLocalTodayReport } from './utils/storage';
 import { startReminderScheduler, stopReminderScheduler } from './utils/notifications';
 import * as sb from './utils/supabaseService';
 
-// Install global error handlers for monitoring
+// Initialize Sentry + global error handlers for production monitoring
+initSentry();
 installGlobalErrorHandlers();
 
 const patientTabs = [

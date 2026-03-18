@@ -1,44 +1,10 @@
 // Supabase Edge Function: ai-chat
 // Proxies requests to Claude API without exposing the API key
-// Deploy: supabase functions deploy ai-chat --no-verify-jwt
+// Deploy: supabase functions deploy ai-chat
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-
-// System prompt — SOURCE OF TRUTH: shared/system-prompt.json
-// This is inlined because Supabase Edge Functions can't import from parent dirs.
-// If updating, ALSO update shared/system-prompt.json
-const SYSTEM_PROMPT = `你是一位痔瘡手術術後衛教 AI 助手，為剛接受痔瘡手術（hemorrhoidectomy 或 stapled hemorrhoidopexy）的病人提供術後恢復相關的衛教資訊。
-
-## 你的角色
-- 你是衛教資訊提供者，不是醫師
-- 使用親切、易懂的繁體中文回答
-- 回答應具體、實用，並適時給予安慰與鼓勵
-
-## 可以回答的範圍
-1. **術後疼痛管理**：疼痛高峰期（通常 POD 2-5）、緩解方式（溫水坐浴、按時服藥、避免久坐）
-2. **出血相關**：少量出血是正常的，何時需要就醫（持續出血、血塊）
-3. **排便問題**：便秘預防（高纖飲食、充足水分 2000ml/天、軟便劑）、排便技巧
-4. **發燒處理**：體溫 ≥ 38°C 應就醫
-5. **傷口照護**：溫水坐浴方法（40°C、10-15分鐘、每天3-4次）、清潔方式
-6. **飲食建議**：高纖維、充足水分、避免辛辣刺激與酒精
-7. **活動與工作**：緩步行走有益、避免劇烈運動 2-4 週、1-2 週可恢復輕度工作
-8. **回診時機**：一般術後 1-2 週回診
-9. **一般術後恢復進程說明**
-
-## 絕對不可以回答的範圍（必須拒絕並引導就醫）
-- ❌ 個別藥物處方或劑量調整建議
-- ❌ 診斷判定
-- ❌ 是否需要再次手術之判斷
-- ❌ 急重症處置建議
-- ❌ 任何非痔瘡手術相關的醫療問題
-
-當遇到不可回答的問題時，請回覆：
-「這個問題需要醫療專業人員提供個別化的回答。建議您聯絡您的醫療團隊或在下次回診時向醫師諮詢。如有緊急狀況，請儘速就醫。」
-
-## 回覆格式
-- 使用 Markdown 格式（粗體、列表）
-- 回覆控制在 200 字以內，簡潔易讀
-- 每則回覆結尾加上提醒：如有疑慮或症狀持續加劇，請聯絡您的醫療團隊`;
+import { SYSTEM_PROMPT } from "./_prompt.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
 // CORS — restrict to production domain + local dev
 const ALLOWED_ORIGINS = [
@@ -123,12 +89,36 @@ Deno.serve(async (req: Request) => {
     );
   }
 
+  // Metrics logging helper
+  const startTime = Date.now();
+  const logMetrics = async (status: string, error?: string, tokens?: { input: number, output: number }) => {
+    try {
+      const adminClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+      await adminClient.from("ai_request_logs").insert({
+        user_id: user.id,
+        study_id: user.user_metadata?.study_id || null,
+        latency_ms: Date.now() - startTime,
+        status,
+        error_message: error || null,
+        model: "claude-3-5-haiku-latest",
+        input_tokens: tokens?.input || null,
+        output_tokens: tokens?.output || null,
+      });
+    } catch (e) {
+      console.warn("Failed to log AI metrics:", e);
+    }
+  };
+
   try {
     const CLAUDE_API_KEY = Deno.env.get("CLAUDE_API_KEY");
     if (!CLAUDE_API_KEY) {
       console.error("CLAUDE_API_KEY not configured");
+      await logMetrics("error", "CLAUDE_API_KEY not configured");
       return new Response(
-        JSON.stringify({ error: "AI service not configured", fallback: true }),
+        JSON.stringify({ error: "AI service not configured" }),
         {
           status: 503,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -184,8 +174,9 @@ Deno.serve(async (req: Request) => {
     if (!response.ok) {
       const errText = await response.text();
       console.error("Claude API error:", response.status, errText);
+      await logMetrics("error", `Claude ${response.status}: ${errText}`);
       return new Response(
-        JSON.stringify({ error: "AI service unavailable", fallback: true }),
+        JSON.stringify({ error: "AI service unavailable" }),
         {
           status: 502,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -197,6 +188,12 @@ Deno.serve(async (req: Request) => {
     const aiText =
       data.content?.[0]?.text || "抱歉，目前無法回覆，請稍後再試。";
 
+    // Log successful request with token usage
+    await logMetrics("success", undefined, {
+      input: data.usage?.input_tokens || 0,
+      output: data.usage?.output_tokens || 0,
+    });
+
     return new Response(
       JSON.stringify({ response: aiText, model: data.model }),
       {
@@ -206,8 +203,9 @@ Deno.serve(async (req: Request) => {
     );
   } catch (err) {
     console.error("Edge function error:", err);
+    await logMetrics("error", err.message || "Internal error");
     return new Response(
-      JSON.stringify({ error: "Internal server error", fallback: true }),
+      JSON.stringify({ error: "Internal server error" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

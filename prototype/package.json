@@ -4,16 +4,17 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:ai": "node api-proxy.mjs & vite",
-    "proxy": "node api-proxy.mjs",
+    "dev": "vite --port 5173",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "sync-prompt": "node scripts/sync-prompt.mjs",
+    "predeploy": "npm run sync-prompt"
   },
   "dependencies": {
+    "@sentry/react": "^10.44.0",
     "@supabase/supabase-js": "^2.99.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
