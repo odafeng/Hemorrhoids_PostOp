@@ -1,0 +1,139 @@
+import { useState, useRef, useEffect } from 'react';
+import { getAIResponse, quickQuestions } from '../utils/mockAI';
+import { getClaudeResponse } from '../utils/claudeService';
+import { getChatHistory, saveChatMessage } from '../utils/storage';
+import * as sb from '../utils/supabaseService';
+
+export default function AIChat({ isDemo, userInfo }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const messagesEndRef = useRef(null);
+
+  const welcomeMsg = {
+    role: 'ai',
+    text: '您好！我是術後衛教 AI 助手 👋\n\n我可以回答關於痔瘡手術後恢復的一般性問題，例如疼痛管理、傷口照護、飲食建議等。\n\n請選擇下方的常見問題，或直接輸入您的問題。',
+  };
+
+  useEffect(() => {
+    const load = async () => {
+      if (isDemo) {
+        const saved = getChatHistory();
+        setMessages(saved.length > 0 ? saved : [welcomeMsg]);
+      } else if (userInfo?.studyId) {
+        try {
+          const logs = await sb.getChatLogs(userInfo.studyId);
+          if (logs.length > 0) {
+            const mapped = logs.flatMap(l => [
+              { role: 'user', text: l.user_message },
+              { role: 'ai', text: l.ai_response },
+            ]);
+            setMessages([welcomeMsg, ...mapped]);
+          } else {
+            setMessages([welcomeMsg]);
+          }
+        } catch (err) {
+          console.error('Chat load error:', err);
+          setMessages([welcomeMsg]);
+        }
+      } else {
+        setMessages([welcomeMsg]);
+      }
+      setLoaded(true);
+    };
+    load();
+  }, [isDemo, userInfo]);
+
+  useEffect(() => {
+    if (loaded) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, loaded]);
+
+  const sendMessage = async (text) => {
+    if (!text.trim()) return;
+
+    const userMsg = { role: 'user', text: text.trim() };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setIsTyping(true);
+
+    let response;
+    if (isDemo) {
+      // Demo mode — use local keyword matching with simulated delay
+      await new Promise(r => setTimeout(r, 600 + Math.random() * 800));
+      response = getAIResponse(text);
+    } else {
+      // Supabase mode — use Claude API via proxy
+      try {
+        response = await getClaudeResponse(text.trim());
+      } catch (err) {
+        console.error('Claude error:', err);
+        response = getAIResponse(text); // fallback to mockAI
+      }
+    }
+
+    const aiMsg = { role: 'ai', text: response };
+    setMessages(prev => [...prev, aiMsg]);
+    setIsTyping(false);
+
+    // Save
+    if (isDemo) {
+      saveChatMessage(userMsg);
+      saveChatMessage(aiMsg);
+    } else if (userInfo?.studyId) {
+      try {
+        await sb.saveChatLog(userInfo.studyId, text.trim(), response);
+      } catch (err) {
+        console.error('Save chat error:', err);
+      }
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage(input);
+    }
+  };
+
+  return (
+    <div className="chat-container">
+      <div className="chat-disclaimer">
+        ⚠️ 本系統僅提供衛教資訊，不提供診斷或治療建議。如有緊急狀況請聯絡醫療機構。
+      </div>
+
+      <div className="chat-messages">
+        {messages.map((msg, i) => (
+          <div key={i} className={`chat-bubble ${msg.role === 'user' ? 'user' : 'ai'}`}>
+            {msg.role === 'ai' && (
+              <div className="bubble-label">🤖 AI 衛教助手</div>
+            )}
+            {msg.text}
+          </div>
+        ))}
+        {isTyping && (
+          <div className="chat-bubble ai" style={{ opacity: 0.7 }}>
+            <div className="bubble-label">🤖 AI 衛教助手</div>
+            <span style={{ animation: 'pulse 1s infinite' }}>正在回覆中...</span>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="chat-input-area">
+        <div className="quick-questions">
+          {quickQuestions.map((q, i) => (
+            <button key={i} className="quick-q" onClick={() => sendMessage(q)} disabled={isTyping}>{q}</button>
+          ))}
+        </div>
+        <div className="chat-input-row">
+          <input className="chat-input" placeholder="輸入您的問題..." value={input}
+            onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} disabled={isTyping} />
+          <button className="chat-send" onClick={() => sendMessage(input)} disabled={!input.trim() || isTyping}>➤</button>
+        </div>
+      </div>
+    </div>
+  );
+}
