@@ -49,6 +49,7 @@ export function useDashboardData(isDemo, userInfo) {
         fever: r.fever,
         wound: r.wound,
         urinary: r.urinary,
+        continence: r.continence,
       }));
       const alerts = checkAlerts(mapped);
       const totalDays = Math.max(1, pod + 1);
@@ -92,6 +93,7 @@ export function useHistoryData(isDemo, userInfo) {
         fever: r.fever,
         wound: r.wound,
         urinary: r.urinary,
+        continence: r.continence,
       }));
     },
     staleTime: 30_000,
