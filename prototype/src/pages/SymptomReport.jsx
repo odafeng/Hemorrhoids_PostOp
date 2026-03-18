@@ -5,7 +5,7 @@ import { checkAlerts } from '../utils/alerts';
 
 const bleedingOptions = ['無', '少量', '持續', '血塊'];
 const bowelOptions = ['正常', '困難', '未排'];
-const woundOptions = ['無異常', '腫脹', '分泌物'];
+const woundOptions = ['無異常', '腫脹', '分泌物', '搔癢', '異物感', '其他'];
 
 export default function SymptomReport({ onComplete, isDemo, userInfo }) {
   const existing = isDemo ? getTodayReport() : null;
@@ -14,12 +14,26 @@ export default function SymptomReport({ onComplete, isDemo, userInfo }) {
   const [bleeding, setBleeding] = useState(existing?.bleeding ?? '');
   const [bowel, setBowel] = useState(existing?.bowel ?? '');
   const [fever, setFever] = useState(existing?.fever ?? false);
-  const [wound, setWound] = useState(existing?.wound ?? '');
+  const [wound, setWound] = useState(() => {
+    if (!existing?.wound) return [];
+    return typeof existing.wound === 'string' ? existing.wound.split(',').map(s => s.trim()).filter(Boolean) : [];
+  });
+  const [woundOther, setWoundOther] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const isValid = bleeding && bowel && wound;
+  const toggleWound = (opt) => {
+    setWound(prev => {
+      if (opt === '無異常') {
+        return prev.includes('無異常') ? [] : ['無異常'];
+      }
+      const without = prev.filter(w => w !== '無異常');
+      return without.includes(opt) ? without.filter(w => w !== opt) : [...without, opt];
+    });
+  };
+
+  const isValid = bleeding && bowel && wound.length > 0 && (!wound.includes('其他') || woundOther.trim());
 
   const getPainColor = (v) => {
     if (v <= 3) return 'var(--success)';
@@ -40,7 +54,8 @@ export default function SymptomReport({ onComplete, isDemo, userInfo }) {
     setSubmitting(true);
     setError('');
 
-    const report = { pain, bleeding, bowel, fever, wound };
+    const woundValue = wound.map(w => w === '其他' ? `其他:${woundOther.trim()}` : w).join(',');
+    const report = { pain, bleeding, bowel, fever, wound: woundValue };
 
     try {
       if (isDemo) {
@@ -49,7 +64,6 @@ export default function SymptomReport({ onComplete, isDemo, userInfo }) {
         const pod = userInfo?.pod || 0;
         await sb.saveReport(userInfo.studyId, pod, report);
 
-        // Check and create alerts if needed
         const allReports = await sb.getAllReports(userInfo.studyId);
         const mapped = allReports.map(r => ({
           date: r.report_date,
@@ -138,14 +152,25 @@ export default function SymptomReport({ onComplete, isDemo, userInfo }) {
         </div>
       </div>
 
-      {/* Wound */}
+      {/* Wound — Multi-select */}
       <div className="form-group">
-        <label className="form-label">傷口狀況</label>
-        <div className="option-group">
+        <label className="form-label">傷口狀況 <span>（可複選）</span></label>
+        <div className="option-group" style={{ flexWrap: 'wrap' }}>
           {woundOptions.map(opt => (
-            <button key={opt} className={`option-pill ${wound === opt ? 'selected' : ''}`} onClick={() => setWound(opt)}>{opt}</button>
+            <button key={opt}
+              className={`option-pill ${wound.includes(opt) ? 'selected' : ''}`}
+              onClick={() => toggleWound(opt)}>{opt}</button>
           ))}
         </div>
+        {wound.includes('其他') && (
+          <input
+            className="chat-input"
+            style={{ width: '100%', marginTop: 'var(--space-sm)' }}
+            placeholder="請描述傷口狀況..."
+            value={woundOther}
+            onChange={e => setWoundOther(e.target.value)}
+          />
+        )}
       </div>
 
       {/* Error */}
