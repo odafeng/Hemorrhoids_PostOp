@@ -7,7 +7,11 @@
 
 BEGIN;
 
--- ── Cleanup ──
+-- ── Cleanup (delete from all FK-dependent tables first) ──
+DELETE FROM ai_chat_logs WHERE study_id LIKE 'TEST-%';
+DELETE FROM usability_surveys WHERE study_id LIKE 'TEST-%';
+DELETE FROM push_subscriptions WHERE study_id LIKE 'TEST-%';
+DELETE FROM pending_notifications WHERE study_id LIKE 'TEST-%';
 DELETE FROM alerts WHERE study_id LIKE 'TEST-%';
 DELETE FROM symptom_reports WHERE study_id LIKE 'TEST-%';
 DELETE FROM patients WHERE study_id LIKE 'TEST-%';
