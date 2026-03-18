@@ -7,7 +7,7 @@ import AIChat from './pages/AIChat';
 import UsabilitySurvey from './pages/UsabilitySurvey';
 import ResearcherDashboard from './pages/ResearcherDashboard';
 import ChatReview from './pages/ChatReview';
-import { onAuthStateChange, getSession, getStudyId, getPatient, getPODFromDate, signOut } from './utils/supabaseService';
+import { onAuthStateChange, getSession, getStudyId, getPatient, ensurePatient, getPODFromDate, signOut } from './utils/supabaseService';
 import { seedDemoData, getTodayReport as getLocalTodayReport } from './utils/storage';
 import { startReminderScheduler, stopReminderScheduler, isNotificationsEnabled } from './utils/notifications';
 import * as sb from './utils/supabaseService';
@@ -93,7 +93,10 @@ export default function App() {
     const studyId = session?.user?.user_metadata?.study_id;
     const role = session?.user?.user_metadata?.role || 'patient';
     if (studyId) {
-      const patient = await getPatient(studyId);
+      // Auto-create patient record on first login
+      const patient = role === 'patient'
+        ? await ensurePatient(studyId)
+        : await getPatient(studyId);
       setUserInfo({
         studyId,
         role,

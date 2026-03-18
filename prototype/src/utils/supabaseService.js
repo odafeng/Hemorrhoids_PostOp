@@ -60,6 +60,32 @@ export async function getPatient(studyId) {
   return data;
 }
 
+/**
+ * Auto-create a patient record if it doesn't exist yet.
+ * Called on first login to prevent FK constraint errors.
+ */
+export async function ensurePatient(studyId) {
+  const existing = await getPatient(studyId);
+  if (existing) return existing;
+
+  // Create minimal patient record with today as surgery_date
+  const { data, error } = await supabase
+    .from('patients')
+    .insert({
+      study_id: studyId,
+      surgery_date: new Date().toISOString().split('T')[0],
+      study_status: 'active',
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('ensurePatient error:', error);
+    return null;
+  }
+  return data;
+}
+
 export function getPODFromDate(surgeryDate) {
   const surgery = new Date(surgeryDate);
   const today = new Date();
