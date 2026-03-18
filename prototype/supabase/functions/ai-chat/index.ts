@@ -75,7 +75,6 @@ Deno.serve(async (req: Request) => {
   }
 
   // Verify JWT is a real user (not just anon key)
-  const { createClient } = await import("jsr:@supabase/supabase-js@2");
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const userClient = createClient(supabaseUrl, supabaseAnonKey, {
@@ -83,6 +82,7 @@ Deno.serve(async (req: Request) => {
   });
   const { data: { user }, error: authError } = await userClient.auth.getUser();
   if (authError || !user) {
+    console.error("Auth failed:", authError?.message || "no user", "header starts with:", authHeader.substring(0, 20));
     return new Response(
       JSON.stringify({ error: "Invalid or expired session" }),
       { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -103,7 +103,7 @@ Deno.serve(async (req: Request) => {
         latency_ms: Date.now() - startTime,
         status,
         error_message: error || null,
-        model: "claude-3-5-haiku-latest",
+        model: "claude-sonnet-4-20250514",
         input_tokens: tokens?.input || null,
         output_tokens: tokens?.output || null,
       });
@@ -164,7 +164,7 @@ Deno.serve(async (req: Request) => {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-3-5-haiku-latest",
+        model: "claude-sonnet-4-20250514",
         max_tokens: 512,
         system: SYSTEM_PROMPT,
         messages,
