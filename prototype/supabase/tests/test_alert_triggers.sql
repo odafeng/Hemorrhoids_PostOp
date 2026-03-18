@@ -7,9 +7,24 @@
 
 BEGIN;
 
--- ── Cleanup helper ──
+-- ── Cleanup ──
 DELETE FROM alerts WHERE study_id LIKE 'TEST-%';
 DELETE FROM symptom_reports WHERE study_id LIKE 'TEST-%';
+DELETE FROM patients WHERE study_id LIKE 'TEST-%';
+
+-- ── Create test patients (FK requirement) ──
+INSERT INTO patients (study_id, surgery_date, surgery_type, hemorrhoid_grade, age, sex, study_status) VALUES
+  ('TEST-PAIN-H', '2026-03-15', 'excision', 3, 45, 'M', 'active'),
+  ('TEST-PAIN-A', '2026-03-15', 'excision', 3, 45, 'M', 'active'),
+  ('TEST-BLEED',  '2026-03-15', 'excision', 3, 45, 'M', 'active'),
+  ('TEST-CLOT',   '2026-03-15', 'excision', 3, 45, 'M', 'active'),
+  ('TEST-BOWEL',  '2026-03-15', 'excision', 3, 45, 'M', 'active'),
+  ('TEST-FEVER',  '2026-03-15', 'excision', 3, 45, 'M', 'active'),
+  ('TEST-UR-R',   '2026-03-15', 'excision', 3, 45, 'M', 'active'),
+  ('TEST-UR-D',   '2026-03-15', 'excision', 3, 45, 'M', 'active'),
+  ('TEST-INCONT', '2026-03-15', 'excision', 3, 45, 'M', 'active'),
+  ('TEST-SOIL',   '2026-03-15', 'excision', 3, 45, 'M', 'active'),
+  ('TEST-NORM',   '2026-03-15', 'excision', 3, 45, 'M', 'active');
 
 -- 結果追蹤
 CREATE TEMP TABLE _test_results (
