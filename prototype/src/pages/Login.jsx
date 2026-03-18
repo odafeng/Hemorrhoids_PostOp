@@ -26,7 +26,7 @@ export default function Login({ onLogin }) {
         await signUp(email, password, {
           role: 'patient',
           study_id: studyId,
-          surgery_date: surgeryDate || new Date().toISOString().split('T')[0],
+          surgery_date: surgeryDate || new Date().toLocaleDateString('en-CA'),
         });
         setError('');
         setMode('login');

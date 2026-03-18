@@ -72,7 +72,7 @@ export async function ensurePatient(studyId) {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     if (!supabaseUrl) {
       // Demo mode — create a fake patient
-      return { study_id: studyId, surgery_date: new Date().toISOString().split('T')[0] };
+      return { study_id: studyId, surgery_date: new Date().toLocaleDateString('en-CA') };
     }
 
     const { data: { session } } = await supabase.auth.getSession();
@@ -226,7 +226,7 @@ export async function saveChatLog(studyId, userMessage, aiResponse, topic) {
 // Usability Surveys
 // =====================
 export async function saveSurvey(studyId, pod, survey) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA');
   const { error } = await supabase
     .from('usability_surveys')
     .insert({

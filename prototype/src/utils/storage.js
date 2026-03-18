@@ -8,7 +8,7 @@ export function getSurgeryDate() {
   const date = localStorage.getItem(SURGERY_DATE_KEY);
   if (!date) {
     // Default: today as surgery date for demo
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA');
     localStorage.setItem(SURGERY_DATE_KEY, today);
     return today;
   }
@@ -34,14 +34,14 @@ export function getAllReports() {
 }
 
 export function getTodayReport() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA');
   const reports = getAllReports();
   return reports.find(r => r.date === today) || null;
 }
 
 export function saveReport(report) {
   const reports = getAllReports();
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toLocaleDateString('en-CA');
   const existing = reports.findIndex(r => r.date === today);
   
   const fullReport = {
@@ -92,7 +92,7 @@ export function getSurveyLocal() {
 export function saveSurveyLocal(survey) {
   const record = {
     ...survey,
-    date: new Date().toISOString().split('T')[0],
+    date: new Date().toLocaleDateString('en-CA'),
     timestamp: new Date().toISOString(),
   };
   localStorage.setItem(SURVEY_KEY, JSON.stringify(record));
@@ -114,7 +114,7 @@ export function seedDemoData() {
   const today = new Date();
   const surgeryDate = new Date(today);
   surgeryDate.setDate(surgeryDate.getDate() - 5);
-  setSurgeryDate(surgeryDate.toISOString().split('T')[0]);
+  setSurgeryDate(surgeryDate.toLocaleDateString('en-CA'));
 
   const demoReports = [
     { pain: 7, bleeding: '少量', bowel: '未排', fever: false, wound: '腫脹', pod: 0 },
@@ -129,7 +129,7 @@ export function seedDemoData() {
     date.setDate(date.getDate() + i);
     return {
       ...r,
-      date: date.toISOString().split('T')[0],
+      date: date.toLocaleDateString('en-CA'),
       timestamp: date.toISOString(),
     };
   });
@@ -176,5 +176,5 @@ export function getResearcherMockData() {
 function _daysAgo(base, n) {
   const d = new Date(base);
   d.setDate(d.getDate() - n);
-  return d.toISOString().split('T')[0];
+  return d.toLocaleDateString('en-CA');
 }

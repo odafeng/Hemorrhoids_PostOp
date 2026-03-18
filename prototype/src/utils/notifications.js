@@ -140,7 +140,7 @@ export function startReminderScheduler(checkReportedFn) {
     if (getNotificationStatus() !== 'granted') return;
 
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    const today = now.toLocaleDateString('en-CA');
 
     // Already sent notification today
     if (lastNotificationDate === today) return;

@@ -36,7 +36,7 @@ export function useDashboardData(isDemo, userInfo) {
       if (!studyId) throw new Error('No study ID');
 
       const patient = await sb.getPatient(studyId);
-      const surgeryDate = patient?.surgery_date || new Date().toISOString().split('T')[0];
+      const surgeryDate = patient?.surgery_date || new Date().toLocaleDateString('en-CA');
       const pod = sb.getPODFromDate(surgeryDate);
       const allReports = await sb.getAllReports(studyId);
       const todayReport = await sb.getTodayReport(studyId);
