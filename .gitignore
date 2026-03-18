@@ -1,2 +1,5 @@
 # IRB documents — confidential, do not commit
 IRB/
+
+# Vercel local config
+.vercel/
