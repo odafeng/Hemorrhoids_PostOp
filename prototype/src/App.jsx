@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation, NavLink } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import SymptomReport from './pages/SymptomReport';
@@ -7,29 +8,31 @@ import AIChat from './pages/AIChat';
 import UsabilitySurvey from './pages/UsabilitySurvey';
 import ResearcherDashboard from './pages/ResearcherDashboard';
 import ChatReview from './pages/ChatReview';
+import OfflineBanner from './components/OfflineBanner';
 import { onAuthStateChange, getSession, getStudyId, getPatient, ensurePatient, getPODFromDate, signOut } from './utils/supabaseService';
 import { seedDemoData, getTodayReport as getLocalTodayReport } from './utils/storage';
-import { startReminderScheduler, stopReminderScheduler, isNotificationsEnabled } from './utils/notifications';
+import { startReminderScheduler, stopReminderScheduler } from './utils/notifications';
 import * as sb from './utils/supabaseService';
 
 const patientTabs = [
-  { id: 'dashboard', label: '首頁', icon: '🏠' },
-  { id: 'report', label: '回報', icon: '📋' },
-  { id: 'history', label: '紀錄', icon: '📊' },
-  { id: 'chat', label: 'AI 衛教', icon: '💬' },
+  { path: '/', label: '首頁', icon: '🏠' },
+  { path: '/report', label: '回報', icon: '📋' },
+  { path: '/history', label: '紀錄', icon: '📊' },
+  { path: '/chat', label: 'AI 衛教', icon: '💬' },
 ];
 
 const researcherTabs = [
-  { id: 'researcherDashboard', label: '概覽', icon: '📊' },
-  { id: 'chatReview', label: '審核', icon: '🔍' },
+  { path: '/researcher', label: '概覽', icon: '📊' },
+  { path: '/review', label: '審核', icon: '🔍' },
 ];
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const navigate = useNavigate();
+  const location = useLocation();
   const [refreshKey, setRefreshKey] = useState(0);
-  const [authState, setAuthState] = useState('loading'); // 'loading' | 'loggedIn' | 'loggedOut'
+  const [authState, setAuthState] = useState('loading');
   const [isDemo, setIsDemo] = useState(false);
-  const [userInfo, setUserInfo] = useState(null); // { studyId, role, surgeryDate, pod }
+  const [userInfo, setUserInfo] = useState(null);
 
   // Check auth on mount
   useEffect(() => {
@@ -62,7 +65,6 @@ export default function App() {
   useEffect(() => {
     if (authState !== 'loggedIn') return;
 
-    // Build check function based on mode
     const checkReported = async () => {
       if (isDemo) {
         return getLocalTodayReport() !== null;
@@ -70,15 +72,14 @@ export default function App() {
         const report = await sb.getTodayReport(userInfo.studyId);
         return report !== null;
       }
-      return true; // Default: don't notify
+      return true;
     };
 
     startReminderScheduler(checkReported);
 
-    // Listen for SW messages (notification click → navigate to report)
     const handleSWMessage = (event) => {
-      if (event.data?.type === 'NAVIGATE' && event.data?.tab) {
-        setActiveTab(event.data.tab);
+      if (event.data?.type === 'NAVIGATE' && event.data?.url) {
+        navigate(event.data.url);
       }
     };
     navigator.serviceWorker?.addEventListener('message', handleSWMessage);
@@ -87,13 +88,12 @@ export default function App() {
       stopReminderScheduler();
       navigator.serviceWorker?.removeEventListener('message', handleSWMessage);
     };
-  }, [authState, isDemo, userInfo]);
+  }, [authState, isDemo, userInfo, navigate]);
 
   const loadUserInfo = async (session) => {
     const studyId = session?.user?.user_metadata?.study_id;
     const role = session?.user?.user_metadata?.role || 'patient';
     if (studyId) {
-      // Auto-create patient record on first login
       const patient = role === 'patient'
         ? await ensurePatient(studyId)
         : await getPatient(studyId);
@@ -118,10 +118,9 @@ export default function App() {
         surgeryDate: null,
         pod: 0,
       });
-      setActiveTab(isResearcherLogin ? 'researcherDashboard' : 'dashboard');
       setAuthState('loggedIn');
+      navigate(isResearcherLogin ? '/researcher' : '/');
     }
-    // For Supabase login, onAuthStateChange will handle it
   };
 
   const handleLogout = async () => {
@@ -133,48 +132,26 @@ export default function App() {
     } else {
       await signOut();
     }
+    navigate('/');
   };
 
   const handleReportComplete = () => {
     setRefreshKey(k => k + 1);
-    setActiveTab('dashboard');
+    navigate('/');
   };
 
   const handleSurveyComplete = () => {
     setRefreshKey(k => k + 1);
-    setActiveTab('dashboard');
+    navigate('/');
   };
 
   const isResearcherRole = userInfo?.role === 'researcher' || userInfo?.role === 'pi';
   const tabs = isResearcherRole ? researcherTabs : patientTabs;
 
-  const renderPage = () => {
-    const commonProps = {
-      isDemo,
-      userInfo,
-      onLogout: handleLogout,
-    };
-
-    switch (activeTab) {
-      case 'dashboard':
-        return <Dashboard key={refreshKey} onNavigate={setActiveTab} {...commonProps} />;
-      case 'report':
-        return <SymptomReport onComplete={handleReportComplete} {...commonProps} />;
-      case 'history':
-        return <History key={refreshKey} {...commonProps} />;
-      case 'chat':
-        return <AIChat {...commonProps} />;
-      case 'survey':
-        return <UsabilitySurvey onComplete={handleSurveyComplete} {...commonProps} />;
-      case 'researcherDashboard':
-        return <ResearcherDashboard key={refreshKey} onNavigate={setActiveTab} {...commonProps} />;
-      case 'chatReview':
-        return <ChatReview onNavigate={setActiveTab} {...commonProps} />;
-      default:
-        return isResearcherRole
-          ? <ResearcherDashboard key={refreshKey} onNavigate={setActiveTab} {...commonProps} />
-          : <Dashboard key={refreshKey} onNavigate={setActiveTab} {...commonProps} />;
-    }
+  const commonProps = {
+    isDemo,
+    userInfo,
+    onLogout: handleLogout,
   };
 
   // Loading state
@@ -194,20 +171,51 @@ export default function App() {
     return <Login onLogin={handleLogin} />;
   }
 
-  // Logged in — show main app
+  // Logged in — URL-based routing
   return (
     <>
-      {renderPage()}
+      <OfflineBanner />
+      <Routes>
+        {/* Patient routes */}
+        <Route path="/" element={
+          isResearcherRole
+            ? <Navigate to="/researcher" replace />
+            : <Dashboard key={refreshKey} onNavigate={(tab) => {
+                const pathMap = { report: '/report', history: '/history', chat: '/chat', survey: '/survey' };
+                navigate(pathMap[tab] || '/');
+              }} {...commonProps} />
+        } />
+        <Route path="/report" element={<SymptomReport onComplete={handleReportComplete} {...commonProps} />} />
+        <Route path="/history" element={<History key={refreshKey} {...commonProps} />} />
+        <Route path="/chat" element={<AIChat {...commonProps} />} />
+        <Route path="/survey" element={<UsabilitySurvey onComplete={handleSurveyComplete} {...commonProps} />} />
+
+        {/* Researcher routes */}
+        <Route path="/researcher" element={
+          <ResearcherDashboard key={refreshKey} onNavigate={(tab) => {
+            const pathMap = { chatReview: '/review' };
+            navigate(pathMap[tab] || '/researcher');
+          }} {...commonProps} />
+        } />
+        <Route path="/review" element={<ChatReview onNavigate={(tab) => {
+          navigate(tab === 'researcherDashboard' ? '/researcher' : '/review');
+        }} {...commonProps} />} />
+
+        {/* Catch-all: redirect to home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+
       <nav className="bottom-nav">
         {tabs.map(tab => (
-          <button
-            key={tab.id}
-            className={`nav-item ${activeTab === tab.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
+          <NavLink
+            key={tab.path}
+            to={tab.path}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+            end={tab.path === '/' || tab.path === '/researcher'}
           >
             <span className="nav-icon">{tab.icon}</span>
             <span>{tab.label}</span>
-          </button>
+          </NavLink>
         ))}
       </nav>
     </>
