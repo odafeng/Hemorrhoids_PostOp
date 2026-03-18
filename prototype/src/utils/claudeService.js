@@ -16,12 +16,24 @@ function getAIChatUrl() {
   return `${supabaseUrl}/functions/v1/ai-chat`;
 }
 
-function getHeaders() {
+async function getHeaders() {
   const headers = { 'Content-Type': 'application/json' };
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
   if (anonKey) {
-    headers['Authorization'] = `Bearer ${anonKey}`;
-    headers['apikey'] = anonKey;
+    headers['apikey'] = anonKey; // Required for Supabase routing
+
+    // Send user JWT for auth (not anon key)
+    try {
+      const { default: supabase } = await import('./supabaseClient');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      } else {
+        headers['Authorization'] = `Bearer ${anonKey}`;
+      }
+    } catch {
+      headers['Authorization'] = `Bearer ${anonKey}`;
+    }
   }
   return headers;
 }
@@ -54,7 +66,7 @@ export async function getClaudeResponse(question, options = {}) {
 
     const res = await fetch(getAIChatUrl(), {
       method: 'POST',
-      headers: getHeaders(),
+      headers: await getHeaders(),
       body: JSON.stringify(body),
     });
 
