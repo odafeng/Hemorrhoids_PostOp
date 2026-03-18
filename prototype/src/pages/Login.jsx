@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { signIn, signUp } from '../utils/supabaseService';
 
+const VALID_INVITE_CODE = import.meta.env.VITE_INVITE_CODE || 'HEMORRHOID2026';
+
 export default function Login({ onLogin }) {
   const [mode, setMode] = useState('login'); // 'login' | 'register' | 'demo'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [studyId, setStudyId] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -16,6 +19,9 @@ export default function Login({ onLogin }) {
 
     try {
       if (mode === 'register') {
+        if (inviteCode.trim().toUpperCase() !== VALID_INVITE_CODE.toUpperCase()) {
+          throw new Error('邀請碼不正確，請向研究團隊索取。');
+        }
         await signUp(email, password, {
           role: 'patient',
           study_id: studyId,
@@ -73,6 +79,18 @@ export default function Login({ onLogin }) {
 
             <form onSubmit={handleSubmit}>
               {mode === 'register' && (
+                <>
+                <div className="form-group">
+                  <label className="form-label">邀請碼 <span>(Invite Code)</span></label>
+                  <input
+                    className="chat-input"
+                    style={{ width: '100%' }}
+                    placeholder="請輸入研究團隊提供的邀請碼"
+                    value={inviteCode}
+                    onChange={e => setInviteCode(e.target.value)}
+                    required
+                  />
+                </div>
                 <div className="form-group">
                   <label className="form-label">研究編號 <span>(Study ID)</span></label>
                   <input
@@ -84,6 +102,7 @@ export default function Login({ onLogin }) {
                     required
                   />
                 </div>
+                </>
               )}
 
               <div className="form-group">

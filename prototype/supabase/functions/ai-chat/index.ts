@@ -4,7 +4,9 @@
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-// SYNC WITH: api-proxy.mjs (line 45-76)
+// System prompt — SOURCE OF TRUTH: shared/system-prompt.json
+// This is inlined because Supabase Edge Functions can't import from parent dirs.
+// If updating, ALSO update shared/system-prompt.json
 const SYSTEM_PROMPT = `你是一位痔瘡手術術後衛教 AI 助手，為剛接受痔瘡手術（hemorrhoidectomy 或 stapled hemorrhoidopexy）的病人提供術後恢復相關的衛教資訊。
 
 ## 你的角色
@@ -38,16 +40,27 @@ const SYSTEM_PROMPT = `你是一位痔瘡手術術後衛教 AI 助手，為剛�
 - 回覆控制在 200 字以內，簡潔易讀
 - 每則回覆結尾加上提醒：如有疑慮或症狀持續加劇，請聯絡您的醫療團隊`;
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+// CORS — restrict to production domain + local dev
+const ALLOWED_ORIGINS = [
+  "https://prototype-zeta-black.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:4173",
+];
+
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get("origin") || "";
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
+}
+
 // Simple in-memory rate limiting (per edge instance)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT = 20; // max requests per window
-const RATE_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT = 20;
+const RATE_WINDOW_MS = 60_000;
 
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
@@ -61,7 +74,8 @@ function checkRateLimit(ip: string): boolean {
 }
 
 Deno.serve(async (req: Request) => {
-  // Handle CORS preflight
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -110,7 +124,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Build user message with optional symptom context
     let userMessage = question.trim();
     if (recentSymptoms) {
       userMessage += `\n\n[病人近期症狀摘要（去識別化）：${JSON.stringify(recentSymptoms)}]`;
@@ -119,7 +132,6 @@ Deno.serve(async (req: Request) => {
     // Build multi-turn messages from conversation history
     const messages: Array<{role: string, content: string}> = [];
     if (Array.isArray(history) && history.length > 0) {
-      // Map frontend {role: 'user'|'ai', text} to Claude {role: 'user'|'assistant', content}
       for (const msg of history.slice(-20)) {
         if (msg.role === 'user') {
           messages.push({ role: 'user', content: msg.text });
@@ -128,10 +140,8 @@ Deno.serve(async (req: Request) => {
         }
       }
     }
-    // Add current question
     messages.push({ role: "user", content: userMessage });
 
-    // Call Claude API
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {

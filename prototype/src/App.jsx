@@ -9,10 +9,15 @@ import UsabilitySurvey from './pages/UsabilitySurvey';
 import ResearcherDashboard from './pages/ResearcherDashboard';
 import ChatReview from './pages/ChatReview';
 import OfflineBanner from './components/OfflineBanner';
+import IOSInstallPrompt from './components/IOSInstallPrompt';
+import { installGlobalErrorHandlers } from './utils/errorLogger';
 import { onAuthStateChange, getSession, getStudyId, getPatient, ensurePatient, getPODFromDate, signOut } from './utils/supabaseService';
 import { seedDemoData, getTodayReport as getLocalTodayReport } from './utils/storage';
 import { startReminderScheduler, stopReminderScheduler } from './utils/notifications';
 import * as sb from './utils/supabaseService';
+
+// Install global error handlers for monitoring
+installGlobalErrorHandlers();
 
 const patientTabs = [
   { path: '/', label: '首頁', icon: '🏠' },
@@ -173,8 +178,8 @@ export default function App() {
 
   // Logged in — URL-based routing
   return (
-    <>
-      <OfflineBanner />
+    <>      <OfflineBanner />
+      <IOSInstallPrompt />
       <Routes>
         {/* Patient routes */}
         <Route path="/" element={
