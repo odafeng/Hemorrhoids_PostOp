@@ -82,6 +82,32 @@ test.describe('Auth Mode — Report & AI Chat', () => {
     await expect(page.getByText('✓ 已完成')).toBeVisible();
   });
 
+  test('History shows submitted report data', async ({ page }) => {
+    // Navigate to history
+    await page.locator('nav.bottom-nav').getByText('紀錄').click();
+    await expect(page.getByText('歷史紀錄')).toBeVisible({ timeout: 10000 });
+
+    // Should show at least 1 report
+    await expect(page.getByText(/已完成 \d+ 次回報/)).toBeVisible();
+
+    // Today's report should be in the timeline
+    const today = new Date().toLocaleDateString('en-CA');
+    await expect(page.getByText(today)).toBeVisible();
+
+    // Verify symptom values from the submitted report are displayed
+    // Pain chart should exist if 2+ reports
+    const timeline = page.locator('.timeline');
+    await expect(timeline).toBeVisible();
+
+    // The latest timeline item should show symptom data
+    const latestItem = page.locator('.timeline-item').first();
+    await expect(latestItem.getByText(/\/10/)).toBeVisible(); // pain score
+    await expect(latestItem.getByText('出血')).toBeVisible();
+    await expect(latestItem.getByText('排便')).toBeVisible();
+    await expect(latestItem.getByText('發燒')).toBeVisible();
+    await expect(latestItem.getByText('傷口')).toBeVisible();
+  });
+
   test('AI Chat — ask question and get Claude response', async ({ page }) => {
     // Navigate to chat
     await page.locator('nav.bottom-nav').getByText('AI 衛教').click();
