@@ -1,112 +1,191 @@
 # Prototype — 痔瘡術後追蹤 PWA
 
-React + Vite 前端 + Supabase 後端 + Sentry 監控。
+React 19 + Vite 8 前端 + Supabase 後端（Auth / PostgreSQL / Edge Functions / RLS）+ Sentry 監控。
+
+## 架構概覽
+
+```
+病人手機（PWA）
+  ├── Dashboard — POD 計數、今日回報摘要、警示、回報率、推播設定
+  ├── SymptomReport — NRS 疼痛、出血、排便、發燒、排尿、控便、傷口
+  ├── History — 時間軸 + 疼痛趨勢圖（POD 0 顯示為 OP）
+  └── AIChat — Claude API 衛教聊天（Edge Function proxy）
+
+研究者（Web）
+  ├── ResearcherDashboard — 收案總覽、依從率、警示、AI 審核
+  ├── ResearcherPatientLookup — 單一病人狀態查詢
+  └── ChatReview — AI 對話紀錄審核
+
+後端
+  ├── Supabase Auth — JWT + RLS（patient / researcher / pi）
+  ├── PostgreSQL Triggers — fn_check_alerts() + fn_audit_report_submit()
+  ├── Edge Functions — ai-chat / patient-onboard / check-adherence
+  ├── Web Push — VAPID + RFC 8291（check-adherence → 推播未回報病人）
+  └── GitHub Actions — CI（lint + test + build）+ Cron（每日 12:00/20:00 adherence check）
+```
 
 ## 部署步驟
 
 ### 1. Supabase 設定
 
 ```bash
-# 安裝 Supabase CLI
 npm install -g supabase
-
-# 登入並連結專案
 supabase login
 supabase link --project-ref <your-project-ref>
 
-# 套用 schema（首次）
-psql <SUPABASE_DB_URL> -f db/schema.sql
-
-# 之後的 migration
+# 套用所有 migrations
 supabase db push
 ```
 
-### 2. Edge Functions 部署
+### 2. VAPID Keys（Web Push 推播）
 
 ```bash
-# 先同步 system prompt
-npm run sync-prompt
-
-# 部署 Edge Functions
-supabase functions deploy ai-chat              # JWT 驗證（gateway + function 雙層）
-supabase functions deploy patient-onboard      # JWT 驗證
-supabase functions deploy check-adherence --no-verify-jwt  # 用 CRON_SECRET 驗證
+node scripts/generate-vapid-keys.mjs
 ```
 
-Edge Function 環境變數（在 Supabase Dashboard → Edge Functions → Settings 設定）：
+輸出的 keys 設定到下方環境變數。
+
+### 3. Edge Functions 部署
+
+```bash
+# 同步 AI system prompt
+npm run sync-prompt
+
+# 部署
+supabase functions deploy ai-chat              # JWT 驗證（gateway + function 雙層）
+supabase functions deploy patient-onboard      # JWT 驗證 + invite token 驗證
+supabase functions deploy check-adherence --no-verify-jwt  # CRON_SECRET 驗證
+```
+
+### 4. 環境變數
+
+**Supabase Edge Function Secrets**（`supabase secrets set KEY=VALUE`）：
 
 | 變數 | 說明 |
 |------|------|
-| `CLAUDE_API_KEY` | Claude API key（Anthropic） |
+| `CLAUDE_API_KEY` | Anthropic Claude API key |
 | `CRON_SECRET` | check-adherence cron 驗證密碼 |
+| `VAPID_PUBLIC_KEY` | Web Push VAPID 公鑰 |
+| `VAPID_PRIVATE_KEY` | Web Push VAPID 私鑰 |
+| `VAPID_SUBJECT` | `mailto:your-email@example.com` |
+| `GLOBAL_INVITE_TOKEN` | 全域邀請碼（預設 `HEMORRHOID2026`，可選） |
 
-### 3. 前端部署（Vercel）
+**Vercel 環境變數**：
+
+| 變數 | 說明 |
+|------|------|
+| `VITE_SUPABASE_URL` | Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon key |
+| `VITE_VAPID_PUBLIC_KEY` | Web Push VAPID 公鑰（與 Supabase 同一把） |
+| `VITE_SENTRY_DSN` | Sentry error tracking DSN |
+
+**GitHub Secrets**（Settings → Secrets → Actions）：
+
+| Secret | 說明 |
+|--------|------|
+| `SUPABASE_URL` | Supabase project URL |
+| `CRON_SECRET` | 與 Edge Function 相同 |
+
+### 5. 前端部署
 
 ```bash
 npm install
 vercel --prod
 ```
 
-Vercel 環境變數（在 Vercel Dashboard → Settings → Environment Variables 設定）：
+### 6. 帳號
 
-| 變數 | 說明 |
-|------|------|
-| `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key |
-| `VITE_INVITE_CODE` | 註冊邀請碼（預設 `HEMORRHOID2026`） |
-| `VITE_SENTRY_DSN` | Sentry error tracking DSN |
-
-### 4. GitHub Secrets（for CI + Cron）
-
-在 GitHub → Settings → Secrets and variables → **Actions** 設定：
-
-| Secret | 說明 |
-|--------|------|
-| `SUPABASE_URL` | Supabase project URL |
-| `CRON_SECRET` | 與 Edge Function env 相同的密碼 |
-
-### 5. 研究者帳號
-
-在 Supabase Dashboard → Authentication → Users → Add User：
-
+**研究者**：在 Supabase Dashboard → Authentication → Users → Add User，metadata 設：
 ```json
 { "role": "researcher", "study_id": "RESEARCHER-001" }
 ```
+
+**病人**：透過 App 註冊頁面，輸入邀請碼（預設 `HEMORRHOID2026`）+ study_id + 手術日期。
 
 ## 開發
 
 ```bash
 npm run dev            # 開發模式 (port 5173)
-npm test               # 100 unit tests
+npm test               # 117 unit tests
 npm run build          # Production build
 npm run sync-prompt    # 同步 system prompt → Edge Function
 ```
 
-## System Prompt 維護
+## 推播通知機制
 
-- **唯一來源**：`shared/system-prompt.json`
-- **同步機制**：`npm run sync-prompt` → 自動產生 `supabase/functions/ai-chat/_prompt.ts`
-- **CI 自動**：deploy 前會自動執行 `predeploy` script 同步
+兩層保障：
+
+1. **Web Push（主要）**：GitHub Actions cron 每天 12:00 / 20:00 觸發 `check-adherence` Edge Function → 查未回報病人 → 透過 VAPID + Web Push API 發送推播 → SW 收到後彈系統通知 → 點擊開啟 App。**即使 App 關著也收得到。**
+
+2. **Client-side scheduler（備用）**：App 開著時，每 15 分鐘檢查是否已過提醒時間且未回報 → 透過 Service Worker 彈本機通知。
+
+通知偏好同步到 `notification_preferences` table，跨裝置一致。
+
+## Alert 引擎
+
+**Server-side only**（PostgreSQL Trigger `fn_check_alerts()`），INSERT 和 UPDATE 都會觸發：
+
+| 規則 | 條件 | 等級 |
+|------|------|------|
+| 持續高痛 | NRS ≥ 8 連續 3 天 | danger |
+| 持續出血 | 「持續」連續 2 次 | danger |
+| 血塊 | 單次 | danger |
+| 未排便 | 連續 3 天 | warning |
+| 發燒 | 單次 | danger |
+| 尿滯留 | 「尿不出來」單次 | danger |
+| 排尿困難 | 「困難」連續 2 天 | warning |
+| 失禁 | 單次 | danger |
+| 滲便 | 連續 2 天 | warning |
+
+Client-side `checkAlerts()` 僅用於 Demo mode。
+
+## Onboarding 流程
+
+病人註冊 → 輸入邀請碼 → `patient-onboard` Edge Function 驗證（優先查 `study_invites` table per-patient token → fallback 到 `GLOBAL_INVITE_TOKEN`）→ 建立 patient record → audit trail。
 
 ## 測試
 
 ```
-9 test files, 100+ tests:
+10 test files, 117 tests:
 ├── alerts.test.js          — 17 alert rules
 ├── high-risk.test.js       — 11 auth + edge cases + errorLogger
 ├── mockAI.test.js          — 14 mock AI responses
 ├── storage.test.js         — 16 localStorage operations
-├── schemaAlignment.test.js — schema contract smoke tests (DB ↔ frontend ↔ migrations)
+├── schemaAlignment.test.js — 16 schema contract smoke tests (DB ↔ frontend ↔ migrations)
 ├── AIChat.test.jsx         — 7 AI chat UI
 ├── Dashboard.test.jsx      — 10 dashboard rendering
 ├── History.test.jsx        — 7 history display
 ├── Login.test.jsx          — 8 login/register flow
-└── SymptomReport.test.jsx  — 10 symptom report form
+└── SymptomReport.test.jsx  — 11 symptom report form
 ```
+
+DB trigger 測試（手動在 SQL Editor 執行）：`supabase/tests/test_alert_triggers.sql`（16 tests，含 UPDATE / dedup / re-trigger / correction）
 
 ## Schema 來源
 
-- **唯一真相（Source of Truth）**：`supabase/migrations/` 目錄下的 ordered migration files
+- **Source of Truth**：`supabase/migrations/` 目錄下的 ordered migration files
 - **db/schema.sql**：僅供參考（reference only），可能與最新 migration 有差異
-- **Schema Contract**：`src/utils/schemaContract.js` 定義 frontend ↔ DB 欄位對應，CI 會自動驗證
-- 若需最新完整 schema：`supabase db dump --schema public > db/schema_snapshot.sql`
+- **Schema Contract**：`src/utils/schemaContract.js` 定義 frontend ↔ DB 欄位對應，CI 自動驗證
+- 最新完整 schema：`supabase db dump --schema public > db/schema_snapshot.sql`
+
+## System Prompt 維護
+
+- **唯一來源**：`shared/system-prompt.json`
+- **同步機制**：`npm run sync-prompt` → 產生 `supabase/functions/ai-chat/_prompt.ts`
+- **CI**：deploy 前自動執行 `predeploy` script 同步
+- **更新**：修改 JSON → `npm run sync-prompt` → `supabase functions deploy ai-chat`
+
+## Audit Trail
+
+所有關鍵操作記錄到 `audit_trail` table，詳見 `docs/audit-trail-events.md`。
+
+涵蓋事件：`report.submit`、`alert.create`、`patient.onboard`、`ai.chat_request`、`researcher.review_chat`、`cron.check_adherence`。
+
+## 文件
+
+| 文件 | 用途 |
+|------|------|
+| `docs/audit-trail-events.md` | Audit trail 事件對照表（IRB / paper methods 用） |
+| `docs/pwa-smoke-test.md` | PWA vs Web 一致性手動測試 checklist |
+| `docs/KNOWN_LIMITATIONS.md` | 已知限制與技術決策 |
+| `hemorrhoid_postop_ai_plan.md` | 研究計畫書（IRB 用） |
