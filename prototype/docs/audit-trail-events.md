@@ -13,6 +13,7 @@ This document serves as reference for IRB applications and paper methods section
 | `patient.onboard`        | patient    | Edge Function              | New patient record created via onboarding  |
 | `ai.chat_request`        | patient    | Edge Function              | Patient uses AI 衛教 chatbot              |
 | `researcher.review_chat` | researcher | Client-side (RLS)          | Researcher reviews an AI chat log          |
+| `researcher.batch_review`| researcher | Client-side (RLS)          | Researcher batch-reviews multiple AI chats  |
 | `cron.check_adherence`   | system     | Edge Function (cron)       | Daily adherence check with reminder count  |
 
 ## Fields

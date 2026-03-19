@@ -65,6 +65,8 @@ jobs:
           CI: true
           E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
           E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+          E2E_RESEARCHER_EMAIL: ${{ secrets.E2E_RESEARCHER_EMAIL }}
+          E2E_RESEARCHER_PASSWORD: ${{ secrets.E2E_RESEARCHER_PASSWORD }}
 
       - name: Upload E2E failure screenshots
         if: failure()

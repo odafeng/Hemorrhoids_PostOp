@@ -348,6 +348,16 @@ export async function getUnreviewedChats() {
   return data || [];
 }
 
+export async function getAllChatsForResearcher() {
+  const { data, error } = await supabase
+    .from('ai_chat_logs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) return [];
+  return data || [];
+}
+
 export async function reviewChat(chatId, result, notes, reviewedBy) {
   const { error } = await supabase
     .from('ai_chat_logs')
@@ -361,7 +371,6 @@ export async function reviewChat(chatId, result, notes, reviewedBy) {
     .eq('id', chatId);
   if (error) throw error;
 
-  // Audit trail: researcher review (best-effort, don't throw on failure)
   try {
     await supabase.from('audit_trail').insert({
       actor_role: reviewedBy || 'researcher',
@@ -372,6 +381,31 @@ export async function reviewChat(chatId, result, notes, reviewedBy) {
     });
   } catch (e) {
     console.warn('[reviewChat] audit trail failed:', e);
+  }
+}
+
+export async function batchReviewChats(chatIds, result, reviewedBy) {
+  const { error } = await supabase
+    .from('ai_chat_logs')
+    .update({
+      reviewed: true,
+      review_result: result,
+      review_notes: null,
+      reviewed_by: reviewedBy || 'researcher',
+      reviewed_at: new Date().toISOString(),
+    })
+    .in('id', chatIds);
+  if (error) throw error;
+
+  try {
+    await supabase.from('audit_trail').insert({
+      actor_role: reviewedBy || 'researcher',
+      action: 'researcher.batch_review',
+      resource: 'ai_chat_logs',
+      detail: { review_result: result, count: chatIds.length },
+    });
+  } catch (e) {
+    console.warn('[batchReviewChats] audit trail failed:', e);
   }
 }
 

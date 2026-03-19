@@ -169,14 +169,16 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
         </div>
       </div>
 
-      {/* Review AI Button */}
-      {unreviewedCount > 0 && (
-        <button className="btn btn-primary delay-5" onClick={() => onNavigate('chatReview')}
-          style={{ marginBottom: 'var(--space-lg)' }}
-        >
-          🔍 審核 AI 回覆（{unreviewedCount} 則待審）
-        </button>
-      )}
+      {/* Review AI Button — always visible */}
+      <button
+        className={`btn ${unreviewedCount > 0 ? 'btn-primary' : 'btn-secondary'} delay-5`}
+        onClick={() => onNavigate('chatReview')}
+        style={{ marginBottom: 'var(--space-sm)', width: '100%' }}
+      >
+        {unreviewedCount > 0
+          ? `🔍 審核 AI 回覆（${unreviewedCount} 則待審）`
+          : '🔍 AI 回覆審核紀錄'}
+      </button>
 
       {/* Export Button */}
       <button

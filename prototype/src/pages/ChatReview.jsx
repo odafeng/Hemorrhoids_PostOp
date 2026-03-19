@@ -7,6 +7,8 @@ export default function ChatReview({ onNavigate, isDemo, userInfo }) {
   const [chats, setChats] = useState([]);
   const [reviewingId, setReviewingId] = useState(null);
   const [reviewNotes, setReviewNotes] = useState('');
+  const [batchProcessing, setBatchProcessing] = useState(false);
+  const [showBatchConfirm, setShowBatchConfirm] = useState(false);
 
   useEffect(() => {
     loadChats();
@@ -19,7 +21,7 @@ export default function ChatReview({ onNavigate, isDemo, userInfo }) {
         const mock = getResearcherMockData();
         setChats(mock.chatLogs);
       } else {
-        const data = await sb.getUnreviewedChats();
+        const data = await sb.getAllChatsForResearcher();
         setChats(data);
       }
     } catch (err) {
@@ -56,6 +58,25 @@ export default function ChatReview({ onNavigate, isDemo, userInfo }) {
   const unreviewed = chats.filter(c => !c.reviewed);
   const reviewed = chats.filter(c => c.reviewed);
 
+  const handleBatchReview = async (result) => {
+    if (unreviewed.length === 0) return;
+    setBatchProcessing(true);
+    try {
+      if (isDemo) {
+        setChats(prev => prev.map(c => !c.reviewed ? { ...c, reviewed: true, review_result: result } : c));
+      } else {
+        const ids = unreviewed.map(c => c.id);
+        await sb.batchReviewChats(ids, result, userInfo?.studyId || 'researcher');
+        setChats(prev => prev.map(c => !c.reviewed ? { ...c, reviewed: true, review_result: result } : c));
+      }
+    } catch (err) {
+      console.error('Batch review error:', err);
+    } finally {
+      setBatchProcessing(false);
+      setShowBatchConfirm(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
@@ -81,6 +102,50 @@ export default function ChatReview({ onNavigate, isDemo, userInfo }) {
       <p className="page-subtitle">
         待審核 {unreviewed.length} 則 / 已審核 {reviewed.length} 則
       </p>
+
+      {/* Batch Review */}
+      {unreviewed.length > 1 && !showBatchConfirm && (
+        <button
+          className="btn btn-secondary"
+          style={{ width: '100%', marginBottom: 'var(--space-md)' }}
+          onClick={() => setShowBatchConfirm(true)}
+          disabled={batchProcessing}
+        >
+          ⚡ 批次審核全部（{unreviewed.length} 則）
+        </button>
+      )}
+      {showBatchConfirm && (
+        <div className="card" style={{ marginBottom: 'var(--space-md)', padding: 'var(--space-md)' }}>
+          <p style={{ fontSize: 'var(--font-sm)', marginBottom: 'var(--space-sm)', color: 'var(--text-secondary)' }}>
+            將 {unreviewed.length} 則未審核的 AI 回覆全部標記為：
+          </p>
+          <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+            <button
+              className="btn btn-review correct"
+              style={{ flex: 1 }}
+              onClick={() => handleBatchReview('correct')}
+              disabled={batchProcessing}
+            >
+              {batchProcessing ? '處理中...' : `✓ 全部正確（${unreviewed.length}）`}
+            </button>
+            <button
+              className="btn btn-review incorrect"
+              style={{ flex: 1 }}
+              onClick={() => handleBatchReview('incorrect')}
+              disabled={batchProcessing}
+            >
+              {batchProcessing ? '處理中...' : `✗ 全部需修正（${unreviewed.length}）`}
+            </button>
+          </div>
+          <button
+            className="btn btn-secondary"
+            style={{ marginTop: 'var(--space-sm)', width: '100%', fontSize: 'var(--font-xs)' }}
+            onClick={() => setShowBatchConfirm(false)}
+          >
+            取消
+          </button>
+        </div>
+      )}
 
       {/* Unreviewed */}
       {unreviewed.length === 0 && (
