@@ -54,24 +54,33 @@ export default function App() {
         return;
       }
 
-      // Step 2: server-verify the token and get fresh user metadata
-      // This prevents PWA from running on stale cached session data
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error || !user) {
-        if (import.meta.env.DEV) {
-          console.warn('[checkAuth] Server verification failed, clearing session', error?.message);
+      // Step 2: try server-verify with timeout (prevents PWA from hanging)
+      let freshUser = null;
+      try {
+        const userPromise = supabase.auth.getUser();
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('getUser timeout')), 5000)
+        );
+        const { data: { user }, error } = await Promise.race([userPromise, timeoutPromise]);
+        if (!error && user) {
+          freshUser = user;
         }
-        await signOut();
-        setAuthState('loggedOut');
-        return;
+      } catch (e) {
+        console.warn('[checkAuth] Server verification failed or timed out:', e.message);
       }
 
-      // Step 3: rebuild session object with server-verified metadata
-      const freshSession = {
-        ...session,
-        user: { ...session.user, user_metadata: user.user_metadata },
-      };
-      await loadUserInfo(freshSession);
+      if (freshUser) {
+        // Server-verified: use fresh metadata
+        const freshSession = {
+          ...session,
+          user: { ...session.user, user_metadata: freshUser.user_metadata },
+        };
+        await loadUserInfo(freshSession);
+      } else {
+        // Fallback: use cached session (better than stuck on loading)
+        console.warn('[checkAuth] Using cached session as fallback');
+        await loadUserInfo(session);
+      }
       setAuthState('loggedIn');
     };
     checkAuth();
