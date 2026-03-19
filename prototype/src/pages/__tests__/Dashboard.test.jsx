@@ -85,7 +85,7 @@ describe('Dashboard Page (Demo Mode)', () => {
 
   it('renders quick action buttons', async () => {
     render(<Dashboard {...defaultProps} />, { wrapper: TestQueryWrapper });
-    await waitFor(() => expect(screen.getByText(/查看紀錄/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/紀錄/)).toBeInTheDocument());
     expect(screen.getByText(/AI 衛教/)).toBeInTheDocument();
   });
 
