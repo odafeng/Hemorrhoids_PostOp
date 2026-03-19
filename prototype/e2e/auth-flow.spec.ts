@@ -64,10 +64,12 @@ test.describe('Auth Mode — Report & AI Chat', () => {
     const urinaryGroup = page.locator('.form-group').filter({ hasText: '排尿狀況' });
     await urinaryGroup.getByRole('button', { name: /正常/ }).click();
 
-    // Wound
-    await page.getByRole('button', { name: '無異常' }).click();
+    // Wound — toggle behavior, need to ensure it's selected not deselected
+    const woundBtn = page.getByRole('button', { name: '無異常' });
+    const isWoundSelected = await woundBtn.evaluate(el => el.classList.contains('selected'));
+    if (!isWoundSelected) await woundBtn.click();
 
-    // Submit
+    // Verify submit button is enabled before clicking
     const submitBtn = page.getByRole('button', { name: '提交回報' });
     await submitBtn.scrollIntoViewIfNeeded();
     await submitBtn.click();
