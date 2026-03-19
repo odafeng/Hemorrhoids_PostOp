@@ -287,8 +287,8 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
           <div className="card-title">快捷功能</div>
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-          <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => onNavigate('history')}>📊 查看紀錄</button>
-          <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => onNavigate('chat')}>💬 AI 衛教</button>
+          <button className="btn btn-secondary" style={{ flex: 1, whiteSpace: 'nowrap' }} onClick={() => onNavigate('history')}>📊 紀錄</button>
+          <button className="btn btn-secondary" style={{ flex: 1, whiteSpace: 'nowrap' }} onClick={() => onNavigate('chat')}>💬 AI 衛教</button>
         </div>
         <button
           className="btn btn-secondary"
