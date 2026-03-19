@@ -19,9 +19,10 @@ React 19 + Vite 8 前端 + Supabase 後端（Auth / PostgreSQL / Edge Functions 
 後端
   ├── Supabase Auth — JWT + RLS（patient / researcher / pi）
   ├── PostgreSQL Triggers — fn_check_alerts() + fn_audit_report_submit()
-  ├── Edge Functions — ai-chat / patient-onboard / check-adherence
+  ├── PostgreSQL pgvector — rag_documents（106 chunks，cosine similarity search）
+  ├── Edge Functions — ai-chat / patient-onboard / check-adherence / health
   ├── Web Push — VAPID + RFC 8291（check-adherence → 推播未回報病人）
-  └── GitHub Actions — CI（lint + test + build）+ Cron（每日 12:00/20:00 adherence check）
+  └── GitHub Actions — CI + Cron（adherence）+ Backup + Uptime
 ```
 
 ## 部署步驟
@@ -51,10 +52,19 @@ node scripts/generate-vapid-keys.mjs
 # 同步 AI system prompt
 npm run sync-prompt
 
-# 部署
+# 部署 Edge Functions
 supabase functions deploy ai-chat              # JWT 驗證（gateway + function 雙層）
 supabase functions deploy patient-onboard      # JWT 驗證 + invite token 驗證
 supabase functions deploy check-adherence --no-verify-jwt  # CRON_SECRET 驗證
+supabase functions deploy health --no-verify-jwt  # 公開健康檢查
+```
+
+### 4. RAG 衛教知識庫
+
+```bash
+# 將 rag/ 下的 .md + .pdf 檔案 chunk + embed + 存入 pgvector
+node --env-file=.env scripts/ingest-rag.mjs
+# 更新衛教文件後，重跑上面這行即可
 ```
 
 ### 4. 環境變數
@@ -63,7 +73,8 @@ supabase functions deploy check-adherence --no-verify-jwt  # CRON_SECRET 驗證
 
 | 變數 | 說明 |
 |------|------|
-| `CLAUDE_API_KEY` | Anthropic Claude API key |
+| `CLAUDE_API_KEY` | Anthropic Claude API key（Generation） |
+| `OPENAI_API_KEY` | OpenAI API key（RAG embedding） |
 | `CRON_SECRET` | check-adherence cron 驗證密碼 |
 | `VAPID_PUBLIC_KEY` | Web Push VAPID 公鑰 |
 | `VAPID_PRIVATE_KEY` | Web Push VAPID 私鑰 |
@@ -109,7 +120,25 @@ npm run dev            # 開發模式 (port 5173)
 npm test               # 117 unit tests
 npm run build          # Production build
 npm run sync-prompt    # 同步 system prompt → Edge Function
+node --env-file=.env scripts/ingest-rag.mjs  # 重新 ingest 衛教知識庫
 ```
+
+## RAG 衛教知識庫
+
+AI chat 使用 Retrieval-Augmented Generation（RAG）從衛教知識庫檢索相關段落：
+
+```
+病人提問 → OpenAI embedding → pgvector cosine search → top-3 chunks
+        → 注入 Claude system prompt → 回覆（附 citation sources）
+```
+
+| 來源 | 檔案數 | Chunks |
+|------|--------|--------|
+| 衛教 markdown | 8 篇 | 71 |
+| 臨床指引 PDF | 3 篇（ASCRS / ESCP / 2025 review） | 35 |
+| **總計** | **11** | **106** |
+
+知識庫位於 `rag/` 目錄。修改後重跑 `node --env-file=.env scripts/ingest-rag.mjs` 即可更新。
 
 ## 推播通知機制
 
