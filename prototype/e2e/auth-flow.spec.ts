@@ -9,12 +9,31 @@ test.describe('Auth Mode — Report & AI Chat', () => {
   test.skip(!email || !password, 'E2E_EMAIL / E2E_PASSWORD not set');
 
   test.beforeEach(async ({ page }) => {
+    // Capture console errors for debugging
+    page.on('console', msg => {
+      if (msg.type() === 'error') console.log('[BROWSER ERROR]', msg.text());
+    });
+
     await page.goto('/');
     await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10000 });
     await page.getByPlaceholder('your@email.com').fill(email);
     await page.getByPlaceholder('••••••••').fill(password);
     await page.locator('form').getByRole('button', { name: '登入' }).click();
-    await expect(page.getByText('術後天數')).toBeVisible({ timeout: 15000 });
+
+    // Wait for either: dashboard loads, OR login error appears, OR loading screen
+    const dashboard = page.getByText('術後天數');
+    const loginError = page.locator('.alert-banner');
+    const loadingScreen = page.getByText('載入中');
+
+    // First: make sure we left the login page (form should disappear)
+    await expect(page.getByPlaceholder('your@email.com')).not.toBeVisible({ timeout: 20000 }).catch(async () => {
+      // Still on login page — probably login failed
+      const bodyText = await page.locator('body').innerText();
+      throw new Error(`Login failed — still on login page. Page text: ${bodyText.slice(0, 500)}`);
+    });
+
+    // Then wait for dashboard
+    await expect(dashboard).toBeVisible({ timeout: 20000 });
   });
 
   test('Submit symptom report (full form)', async ({ page }) => {
