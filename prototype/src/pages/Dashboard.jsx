@@ -1,6 +1,6 @@
 import { useDashboardData } from '../utils/hooks';
-import { checkAlerts } from '../utils/alerts';
 import NotificationSetup from '../components/NotificationSetup';
+import DebugPanel from '../components/DebugPanel';
 
 export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
   const { data, isLoading, error } = useDashboardData(isDemo, userInfo);
@@ -20,9 +20,24 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
   }
 
   if (error) {
+    const isMissingPatient = error.message?.includes('MISSING_PATIENT') || error.message?.includes('MISSING_SURGERY_DATE');
     return (
       <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-        <p style={{ color: 'var(--danger)' }}>載入失敗：{error.message}</p>
+        <div style={{ textAlign: 'center', maxWidth: '300px' }}>
+          <div style={{ fontSize: '2rem', marginBottom: 'var(--space-md)' }}>{isMissingPatient ? '🔄' : '❌'}</div>
+          <p style={{ color: 'var(--danger)', marginBottom: 'var(--space-sm)' }}>
+            {isMissingPatient ? '尚未完成病人資料同步' : '載入失敗'}
+          </p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-sm)' }}>
+            {isMissingPatient
+              ? '請重新登入或聯絡研究團隊。'
+              : error.message}
+          </p>
+          <button className="btn btn-secondary" style={{ marginTop: 'var(--space-md)' }} onClick={onLogout}>
+            重新登入
+          </button>
+          <DebugPanel userInfo={userInfo} isDemo={isDemo} />
+        </div>
       </div>
     );
   }
@@ -198,6 +213,9 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
 
       {/* Notification Settings */}
       <NotificationSetup />
+
+      {/* Dev-only diagnostics for PWA vs web consistency */}
+      <DebugPanel userInfo={userInfo} isDemo={isDemo} />
     </div>
   );
 }

@@ -50,7 +50,7 @@ describe('Dashboard Page (Demo Mode)', () => {
 
   it('shows Demo badge', async () => {
     render(<Dashboard {...defaultProps} />, { wrapper: TestQueryWrapper });
-    await waitFor(() => expect(screen.getByText(/Demo/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('（Demo）')).toBeInTheDocument());
   });
 
   it('displays POD counter', async () => {

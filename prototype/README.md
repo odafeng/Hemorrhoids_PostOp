@@ -91,14 +91,22 @@ npm run sync-prompt    # 同步 system prompt → Edge Function
 ## 測試
 
 ```
-9 test files, 100 tests:
+9 test files, 100+ tests:
 ├── alerts.test.js          — 17 alert rules
 ├── high-risk.test.js       — 11 auth + edge cases + errorLogger
 ├── mockAI.test.js          — 14 mock AI responses
 ├── storage.test.js         — 16 localStorage operations
+├── schemaAlignment.test.js — schema contract smoke tests (DB ↔ frontend ↔ migrations)
 ├── AIChat.test.jsx         — 7 AI chat UI
 ├── Dashboard.test.jsx      — 10 dashboard rendering
 ├── History.test.jsx        — 7 history display
 ├── Login.test.jsx          — 8 login/register flow
 └── SymptomReport.test.jsx  — 10 symptom report form
 ```
+
+## Schema 來源
+
+- **唯一真相（Source of Truth）**：`supabase/migrations/` 目錄下的 ordered migration files
+- **db/schema.sql**：僅供參考（reference only），可能與最新 migration 有差異
+- **Schema Contract**：`src/utils/schemaContract.js` 定義 frontend ↔ DB 欄位對應，CI 會自動驗證
+- 若需最新完整 schema：`supabase db dump --schema public > db/schema_snapshot.sql`

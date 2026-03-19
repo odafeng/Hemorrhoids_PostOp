@@ -95,4 +95,45 @@ describe('Schema Alignment — Frontend ↔ DB', () => {
       expect(src).toContain(val);
     }
   });
+
+  // ── Schema contract: DB structure smoke tests ──
+
+  it('schema.sql or migrations define patients table with surgery_date', () => {
+    const schema = readSrc('db/schema.sql');
+    expect(schema).toContain('CREATE TABLE patients');
+    expect(schema).toContain('surgery_date');
+  });
+
+  it('schema.sql or migrations define alerts table with required columns', () => {
+    const schema = readSrc('db/schema.sql');
+    expect(schema).toContain('CREATE TABLE alerts');
+    expect(schema).toContain('alert_type');
+    expect(schema).toContain('alert_level');
+    expect(schema).toContain('acknowledged');
+  });
+
+  it('all symptom_reports columns exist across schema.sql + migrations', () => {
+    const schema = readSrc('db/schema.sql');
+    const migration = readSrc('supabase/migrations/20260324_urinary_continence.sql');
+    const combined = schema + '\n' + migration;
+
+    // Every DB column from schemaContract must appear somewhere
+    for (const col of Object.keys(SYMPTOM_FIELDS)) {
+      expect(combined).toContain(col);
+    }
+  });
+
+  it('alert trigger migration fires on INSERT OR UPDATE', () => {
+    const triggerFix = readSrc('supabase/migrations/20260326_alert_trigger_update.sql');
+    expect(triggerFix).toContain('AFTER INSERT OR UPDATE ON symptom_reports');
+  });
+
+  it('study_invites table defined in migrations', () => {
+    const migration = readSrc('supabase/migrations/20260326_study_invites.sql');
+    expect(migration).toContain('CREATE TABLE');
+    expect(migration).toContain('study_invites');
+    expect(migration).toContain('invite_token');
+    expect(migration).toContain('status');
+    expect(migration).toContain('expires_at');
+  });
 });

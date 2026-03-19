@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { signIn, signUp } from '../utils/supabaseService';
 
-const VALID_INVITE_CODE = import.meta.env.VITE_INVITE_CODE || 'HEMORRHOID2026';
-
 export default function Login({ onLogin }) {
   const [mode, setMode] = useState('login'); // 'login' | 'register' | 'demo'
   const [email, setEmail] = useState('');
@@ -20,9 +18,12 @@ export default function Login({ onLogin }) {
 
     try {
       if (mode === 'register') {
-        if (inviteCode.trim().toUpperCase() !== VALID_INVITE_CODE.toUpperCase()) {
-          throw new Error('邀請碼不正確，請向研究團隊索取。');
+        // Basic client-side check (real validation happens server-side in patient-onboard)
+        if (!inviteCode.trim()) {
+          throw new Error('請輸入邀請碼。');
         }
+        // Store invite token for patient-onboard Edge Function to verify
+        sessionStorage.setItem('invite_token', inviteCode.trim());
         await signUp(email, password, {
           role: 'patient',
           study_id: studyId,

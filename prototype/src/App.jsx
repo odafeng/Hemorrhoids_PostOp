@@ -7,11 +7,13 @@ import History from './pages/History';
 import AIChat from './pages/AIChat';
 import UsabilitySurvey from './pages/UsabilitySurvey';
 import ResearcherDashboard from './pages/ResearcherDashboard';
+import ResearcherPatientLookup from './pages/ResearcherPatientLookup';
 import ChatReview from './pages/ChatReview';
 import OfflineBanner from './components/OfflineBanner';
 import IOSInstallPrompt from './components/IOSInstallPrompt';
 import { installGlobalErrorHandlers, initSentry } from './utils/errorLogger';
 import { onAuthStateChange, getSession, getStudyId, getPatient, ensurePatient, getPODFromDate, signOut } from './utils/supabaseService';
+import supabase from './utils/supabaseClient';
 import { seedDemoData, getTodayReport as getLocalTodayReport } from './utils/storage';
 import { startReminderScheduler, stopReminderScheduler } from './utils/notifications';
 import * as sb from './utils/supabaseService';
@@ -29,7 +31,8 @@ const patientTabs = [
 
 const researcherTabs = [
   { path: '/researcher', label: '概覽', icon: '📊' },
-  { path: '/review', label: '審核', icon: '🔍' },
+  { path: '/lookup', label: '查詢', icon: '🔍' },
+  { path: '/review', label: '審核', icon: '📝' },
 ];
 
 export default function App() {
@@ -43,13 +46,32 @@ export default function App() {
   // Check auth on mount
   useEffect(() => {
     const checkAuth = async () => {
+      // Step 1: get cached session (needed for token)
       const session = await getSession();
-      if (session) {
-        await loadUserInfo(session);
-        setAuthState('loggedIn');
-      } else {
+      if (!session) {
         setAuthState('loggedOut');
+        return;
       }
+
+      // Step 2: server-verify the token and get fresh user metadata
+      // This prevents PWA from running on stale cached session data
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) {
+        if (import.meta.env.DEV) {
+          console.warn('[checkAuth] Server verification failed, clearing session', error?.message);
+        }
+        await signOut();
+        setAuthState('loggedOut');
+        return;
+      }
+
+      // Step 3: rebuild session object with server-verified metadata
+      const freshSession = {
+        ...session,
+        user: { ...session.user, user_metadata: user.user_metadata },
+      };
+      await loadUserInfo(freshSession);
+      setAuthState('loggedIn');
     };
     checkAuth();
 
@@ -99,10 +121,30 @@ export default function App() {
   const loadUserInfo = async (session) => {
     const studyId = session?.user?.user_metadata?.study_id;
     const role = session?.user?.user_metadata?.role || 'patient';
+
+    if (import.meta.env.DEV) {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+      console.info('[loadUserInfo]', {
+        context: isStandalone ? 'PWA' : 'browser',
+        email: session?.user?.email,
+        userId: session?.user?.id,
+        studyId,
+        role,
+        expiresAt: session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : '(none)',
+      });
+    }
+
     if (studyId) {
-      const patient = role === 'patient'
-        ? await ensurePatient(studyId)
-        : await getPatient(studyId);
+      let patient;
+      if (role === 'patient') {
+        // Read invite token stored during registration (if any)
+        const inviteToken = sessionStorage.getItem('invite_token');
+        patient = await ensurePatient(studyId, inviteToken);
+        // Clear after use — token is single-use
+        if (inviteToken) sessionStorage.removeItem('invite_token');
+      } else {
+        patient = await getPatient(studyId);
+      }
       setUserInfo({
         studyId,
         role,
@@ -199,10 +241,13 @@ export default function App() {
         {/* Researcher routes */}
         <Route path="/researcher" element={
           <ResearcherDashboard key={refreshKey} onNavigate={(tab) => {
-            const pathMap = { chatReview: '/review' };
+            const pathMap = { chatReview: '/review', lookup: '/lookup' };
             navigate(pathMap[tab] || '/researcher');
           }} {...commonProps} />
         } />
+        <Route path="/lookup" element={<ResearcherPatientLookup onNavigate={(tab) => {
+          navigate(tab === 'researcherDashboard' ? '/researcher' : '/lookup');
+        }} {...commonProps} />} />
         <Route path="/review" element={<ChatReview onNavigate={(tab) => {
           navigate(tab === 'researcherDashboard' ? '/researcher' : '/review');
         }} {...commonProps} />} />

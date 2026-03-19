@@ -56,15 +56,26 @@ export async function getPatient(studyId) {
     .select('*')
     .eq('study_id', studyId)
     .single();
-  if (error) return null;
+  if (error) {
+    console.error('[getPatient] failed', {
+      studyId,
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    return null;
+  }
   return data;
 }
 
 /**
  * Ensure patient record exists via server-side Edge Function.
  * The Edge Function uses service_role to bypass RLS safely.
+ * @param {string} studyId
+ * @param {string} [inviteToken] - Required for new patient registration
  */
-export async function ensurePatient(studyId) {
+export async function ensurePatient(studyId, inviteToken) {
   const existing = await getPatient(studyId);
   if (existing) return existing;
 
@@ -85,6 +96,7 @@ export async function ensurePatient(studyId) {
         'Authorization': `Bearer ${token}`,
         'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
       },
+      body: JSON.stringify({ invite_token: inviteToken || null }),
     });
 
     const result = await res.json();

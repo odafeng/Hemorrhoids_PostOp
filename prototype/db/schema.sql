@@ -4,6 +4,20 @@
 -- With Row Level Security (RLS)
 -- ============================================================
 --
+-- ⚠️  REFERENCE ONLY — NOT THE SOURCE OF TRUTH
+--
+-- The authoritative schema is defined by the ordered migrations in:
+--   supabase/migrations/
+--
+-- This file is a historical snapshot and may be OUTDATED.
+-- For example, symptom_reports is missing urinary/continence columns
+-- that were added in 20260324_urinary_continence.sql.
+--
+-- To get the current live schema, run:
+--   supabase db dump --schema public > db/schema_snapshot.sql
+--
+-- ============================================================
+--
 -- Supabase Auth 角色設計：
 --   auth.users.raw_user_meta_data->'role':
 --     'patient'    → 病人：可提交自己的症狀回報、使用 AI 衛教

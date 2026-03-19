@@ -77,7 +77,7 @@ Deno.serve(async (req: Request) => {
     // Use service_role client to bypass RLS for patient insert
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Check if patient already exists
+    // Check if patient already exists (skip token check for existing patients)
     const { data: existing } = await adminClient
       .from("patients")
       .select("*")
@@ -89,6 +89,49 @@ Deno.serve(async (req: Request) => {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // --- Invite token validation (new patients only) ---
+    // Two-tier: per-patient token (study_invites table) OR global token (env var)
+    let body: { invite_token?: string } = {};
+    try {
+      body = await req.json();
+    } catch {
+      // empty body is ok for backwards compat, but token will be required
+    }
+
+    const inviteToken = body.invite_token;
+    if (!inviteToken) {
+      return new Response(JSON.stringify({ error: "invite_token is required for new patient registration" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Tier 1: check per-patient token in study_invites table
+    let invite = null;
+    const { data: inviteRow } = await adminClient
+      .from("study_invites")
+      .select("*")
+      .eq("invite_token", inviteToken)
+      .eq("study_id", studyId)
+      .eq("status", "pending")
+      .gte("expires_at", new Date().toISOString())
+      .maybeSingle();
+
+    if (inviteRow) {
+      invite = inviteRow;
+    } else {
+      // Tier 2: check global invite token (pilot phase convenience)
+      const globalToken = Deno.env.get("GLOBAL_INVITE_TOKEN") || "HEMORRHOID2026";
+      if (inviteToken.toUpperCase() !== globalToken.toUpperCase()) {
+        console.error("Invite validation failed:", { studyId, inviteToken: "[redacted]" });
+        return new Response(JSON.stringify({ error: "Invalid or expired invite token" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      // Global token matched — proceed without study_invites row
     }
 
     // Create new patient record
@@ -108,6 +151,18 @@ Deno.serve(async (req: Request) => {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Mark per-patient invite token as used (skip if global token was used)
+    if (invite) {
+      await adminClient
+        .from("study_invites")
+        .update({
+          status: "used",
+          used_by_user_id: user.id,
+          used_at: new Date().toISOString(),
+        })
+        .eq("id", invite.id);
     }
 
     return new Response(JSON.stringify({ patient }), {
