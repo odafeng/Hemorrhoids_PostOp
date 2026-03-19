@@ -136,36 +136,28 @@ export default function App() {
   const loadUserInfo = async (session) => {
     const studyId = session?.user?.user_metadata?.study_id;
     const role = session?.user?.user_metadata?.role || 'patient';
+    const surgeryDate = session?.user?.user_metadata?.surgery_date || null;
 
-    console.info('[loadUserInfo] start', { studyId, role });
+    console.info('[loadUserInfo]', { studyId, role, surgeryDate });
 
     if (studyId) {
-      let patient = null;
-      try {
-        // Fast path: direct DB query (works for returning patients)
-        patient = await getPatient(studyId);
-
-        // Slow path: only call edge function if patient doesn't exist AND we have an invite token
-        if (!patient && role === 'patient') {
-          const inviteToken = sessionStorage.getItem('invite_token');
-          if (inviteToken) {
-            console.info('[loadUserInfo] patient not found, trying onboard edge function');
-            patient = await ensurePatient(studyId, inviteToken);
-            sessionStorage.removeItem('invite_token');
-          }
-        }
-      } catch (e) {
-        console.error('[loadUserInfo] patient fetch error:', e);
-      }
-
-      console.info('[loadUserInfo] done', { found: !!patient });
-
+      // Set userInfo immediately from session metadata — NO DB call
+      // Dashboard's useDashboardData will fetch authoritative patient data
       setUserInfo({
         studyId,
         role,
-        surgeryDate: patient?.surgery_date || null,
-        pod: patient?.surgery_date ? getPODFromDate(patient.surgery_date) : 0,
+        surgeryDate,
+        pod: surgeryDate ? getPODFromDate(surgeryDate) : 0,
       });
+
+      // Fire-and-forget: onboard new patient if invite token exists
+      const inviteToken = sessionStorage.getItem('invite_token');
+      if (inviteToken && role === 'patient') {
+        sessionStorage.removeItem('invite_token');
+        ensurePatient(studyId, inviteToken).catch(e =>
+          console.error('[loadUserInfo] onboard failed:', e)
+        );
+      }
     }
   };
 
