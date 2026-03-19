@@ -78,8 +78,12 @@ export default function SymptomReport({ onComplete, isDemo, userInfo }) {
         saveLocalReport(report);
       } else {
         const pod = userInfo?.pod || 0;
-        await sb.saveReport(userInfo.studyId, pod, report);
-        // Alerts are now computed server-side by DB trigger fn_check_alerts()
+        // Timeout protection: prevent infinite "提交中" in PWA
+        const savePromise = sb.saveReport(userInfo.studyId, pod, report);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('提交逾時，請檢查網路後重試')), 10000)
+        );
+        await Promise.race([savePromise, timeoutPromise]);
       }
 
       setShowSuccess(true);
@@ -90,6 +94,7 @@ export default function SymptomReport({ onComplete, isDemo, userInfo }) {
     } catch (err) {
       console.error('Submit error:', err);
       setError('提交失敗：' + (err.message || '請稍後再試'));
+    } finally {
       setSubmitting(false);
     }
   };
