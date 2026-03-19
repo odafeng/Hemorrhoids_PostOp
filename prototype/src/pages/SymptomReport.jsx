@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { saveReport as saveLocalReport, getTodayReport, getPOD } from '../utils/storage';
 import * as sb from '../utils/supabaseService';
 
@@ -22,22 +22,64 @@ const urinaryOptions = [
 const woundOptions = ['無異常', '腫脹', '分泌物', '搔癢', '異物感', '其他'];
 
 export default function SymptomReport({ onComplete, isDemo, userInfo }) {
-  const existing = isDemo ? getTodayReport() : null;
-
-  const [pain, setPain] = useState(existing?.pain ?? 3);
-  const [bleeding, setBleeding] = useState(existing?.bleeding ?? '');
-  const [bowel, setBowel] = useState(existing?.bowel ?? '');
-  const [fever, setFever] = useState(existing?.fever ?? false);
-  const [continence, setContinence] = useState(existing?.continence ?? '');
-  const [urinary, setUrinary] = useState(existing?.urinary ?? '');
-  const [wound, setWound] = useState(() => {
-    if (!existing?.wound) return [];
-    return typeof existing.wound === 'string' ? existing.wound.split(',').map(s => s.trim()).filter(Boolean) : [];
-  });
+  const [loadingExisting, setLoadingExisting] = useState(!isDemo && !!userInfo?.studyId);
+  const [pain, setPain] = useState(3);
+  const [bleeding, setBleeding] = useState('');
+  const [bowel, setBowel] = useState('');
+  const [fever, setFever] = useState(false);
+  const [continence, setContinence] = useState('');
+  const [urinary, setUrinary] = useState('');
+  const [wound, setWound] = useState([]);
   const [woundOther, setWoundOther] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Pre-fill from existing report (demo or Supabase)
+  useEffect(() => {
+    const loadExisting = async () => {
+      let existing = null;
+      if (isDemo) {
+        existing = getTodayReport();
+      } else if (userInfo?.studyId) {
+        try {
+          const report = await sb.getTodayReport(userInfo.studyId);
+          if (report) {
+            existing = {
+              pain: report.pain_nrs,
+              bleeding: report.bleeding,
+              bowel: report.bowel,
+              fever: report.fever,
+              wound: report.wound,
+              urinary: report.urinary,
+              continence: report.continence,
+            };
+          }
+        } catch (e) {
+          console.error('[SymptomReport] load existing failed:', e);
+        }
+      }
+
+      if (existing) {
+        setPain(existing.pain ?? 3);
+        setBleeding(existing.bleeding ?? '');
+        setBowel(existing.bowel ?? '');
+        setFever(existing.fever ?? false);
+        setContinence(existing.continence ?? '');
+        setUrinary(existing.urinary ?? '');
+        if (existing.wound) {
+          const parts = typeof existing.wound === 'string'
+            ? existing.wound.split(',').map(s => s.trim()).filter(Boolean)
+            : [];
+          setWound(parts.map(p => p.startsWith('其他:') ? '其他' : p));
+          const otherPart = parts.find(p => p.startsWith('其他:'));
+          if (otherPart) setWoundOther(otherPart.slice(3));
+        }
+      }
+      setLoadingExisting(false);
+    };
+    loadExisting();
+  }, [isDemo, userInfo?.studyId]);
 
   const toggleWound = (opt) => {
     setWound(prev => {
@@ -106,6 +148,14 @@ export default function SymptomReport({ onComplete, isDemo, userInfo }) {
       setSubmitting(false);
     }
   };
+
+  if (loadingExisting) {
+    return (
+      <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <p style={{ color: 'var(--text-secondary)', animation: 'pulse 1s infinite' }}>載入中...</p>
+      </div>
+    );
+  }
 
   if (showSuccess) {
     return (
