@@ -54,10 +54,9 @@ export function useDashboardData(isDemo, userInfo) {
         const surgeryDate = getSurgeryDate();
         const mapped = allReports.map(r => ({ ...r, pain: r.pain ?? r.pain_nrs }));
         const alerts = checkAlerts(mapped);
-        const totalDays = Math.max(1, pod + 1);
-        const adherence = Math.round((allReports.length / totalDays) * 100);
+        const adherence = calcAdherence(allReports.length, pod);
         const surveyDone = getSurveyLocal() !== null;
-        return { pod, surgeryDate, todayReport, allReports, alerts, adherence, surveyDone };
+        return { pod, surgeryDate, todayReport, allReports, alerts, adherence, surveyDone, pendingNotifs: [] };
       }
 
       // Supabase mode
@@ -81,8 +80,7 @@ export function useDashboardData(isDemo, userInfo) {
       const serverAlerts = await sb.getAlerts(studyId);
       const alerts = mapServerAlerts(serverAlerts);
 
-      const totalDays = Math.max(1, pod + 1);
-      const adherence = Math.round((allReports.length / totalDays) * 100);
+      const adherence = calcAdherence(allReports.length, pod);
 
       let surveyDone = false;
       try {
@@ -90,7 +88,13 @@ export function useDashboardData(isDemo, userInfo) {
         surveyDone = !!survey;
       } catch { /* ignore */ }
 
-      return { pod, surgeryDate, todayReport, allReports, alerts, adherence, surveyDone };
+      // Pending notifications from server-driven check-adherence cron
+      let pendingNotifs = [];
+      try {
+        pendingNotifs = await sb.getPendingNotifications(studyId);
+      } catch { /* ignore */ }
+
+      return { pod, surgeryDate, todayReport, allReports, alerts, adherence, surveyDone, pendingNotifs };
     },
     staleTime: 30_000, // Cache for 30 seconds
     retry: 2,
@@ -99,8 +103,40 @@ export function useDashboardData(isDemo, userInfo) {
 }
 
 /**
- * Fetch history reports with normalized field names.
+ * Calculate expected report days based on protocol:
+ *   POD 0–7:  daily (8 days)
+ *   POD 8–14: every 2 days (4 days: 8,10,12,14)
+ *   POD 15–30: twice a week (~5 days)
+ * Returns number of expected reports up to current POD.
  */
+export function getExpectedReportCount(pod) {
+  if (pod < 0) return 0;
+  let count = 0;
+  for (let d = 0; d <= pod; d++) {
+    if (d <= 7) {
+      // POD 0–7: daily
+      count++;
+    } else if (d <= 14) {
+      // POD 8–14: every 2 days (even PODs)
+      if (d % 2 === 0) count++;
+    } else if (d <= 30) {
+      // POD 15–30: ~twice a week (every 3–4 days)
+      // Use Mon/Thu pattern: days where (d-15) % 3 === 0 or (d-15) % 3 === 2
+      const offset = d - 15;
+      if (offset % 7 === 0 || offset % 7 === 3) count++;
+    }
+    // POD > 30: no expected reports
+  }
+  return Math.max(1, count);
+}
+
+/**
+ * Calculate adherence rate: actual reports / expected reports
+ */
+export function calcAdherence(reportCount, pod) {
+  const expected = getExpectedReportCount(pod);
+  return Math.min(100, Math.round((reportCount / expected) * 100));
+}
 export function useHistoryData(isDemo, userInfo) {
   return useQuery({
     queryKey: ['history', isDemo, userInfo?.studyId],

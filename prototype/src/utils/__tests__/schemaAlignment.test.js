@@ -136,4 +136,26 @@ describe('Schema Alignment — Frontend ↔ DB', () => {
     expect(migration).toContain('status');
     expect(migration).toContain('expires_at');
   });
+
+  it('notification_preferences table defined in migrations', () => {
+    const migration = readSrc('supabase/migrations/20260326_notification_preferences.sql');
+    expect(migration).toContain('notification_preferences');
+    expect(migration).toContain('enabled');
+    expect(migration).toContain('hour');
+    expect(migration).toContain('minute');
+  });
+
+  it('audit_trail fixes: INSERT policy + report audit trigger on UPDATE', () => {
+    const migration = readSrc('supabase/migrations/20260326_audit_trail_fixes.sql');
+    expect(migration).toContain('all_roles_insert_audit');
+    expect(migration).toContain('AFTER INSERT OR UPDATE ON symptom_reports');
+  });
+
+  it('trigger test suite covers UPDATE, dedup, and re-trigger scenarios', () => {
+    const tests = readSrc('supabase/tests/test_alert_triggers.sql');
+    expect(tests).toContain('TEST-UPD');     // UPDATE test
+    expect(tests).toContain('dedup');         // duplicate dedup test
+    expect(tests).toContain('TEST-REACK');   // re-trigger after acknowledge
+    expect(tests).toContain('TEST-FIXUP');   // correction (abnormal → normal)
+  });
 });

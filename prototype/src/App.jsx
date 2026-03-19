@@ -42,6 +42,7 @@ export default function App() {
   const [authState, setAuthState] = useState('loading');
   const [isDemo, setIsDemo] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
+  const [showUpdateBanner, setShowUpdateBanner] = useState(false);
 
   // Check auth on mount
   useEffect(() => {
@@ -108,6 +109,9 @@ export default function App() {
     const handleSWMessage = (event) => {
       if (event.data?.type === 'NAVIGATE' && event.data?.url) {
         navigate(event.data.url);
+      }
+      if (event.data?.type === 'SW_UPDATED') {
+        setShowUpdateBanner(true);
       }
     };
     navigator.serviceWorker?.addEventListener('message', handleSWMessage);
@@ -223,6 +227,21 @@ export default function App() {
   return (
     <>      <OfflineBanner />
       <IOSInstallPrompt />
+      {showUpdateBanner && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+          background: 'var(--accent)', color: '#fff', textAlign: 'center',
+          padding: '8px 16px', fontSize: 'var(--font-sm)', display: 'flex',
+          justifyContent: 'center', alignItems: 'center', gap: '8px',
+        }}>
+          <span>系統已更新</span>
+          <button onClick={() => window.location.reload()} style={{
+            background: '#fff', color: 'var(--accent)', border: 'none',
+            borderRadius: '4px', padding: '2px 10px', fontSize: 'var(--font-xs)',
+            cursor: 'pointer', fontWeight: 600,
+          }}>重新載入</button>
+        </div>
+      )}
       <Routes>
         {/* Patient routes */}
         <Route path="/" element={

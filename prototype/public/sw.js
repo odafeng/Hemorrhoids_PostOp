@@ -1,4 +1,4 @@
-const CACHE_NAME = 'postop-tracker-v3';
+const CACHE_NAME = 'postop-tracker-v4';
 const STATIC_ASSETS = [
   '/icon.svg',
   '/favicon.svg',
@@ -15,7 +15,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// Activate — clean up old caches
+// Activate — clean up old caches + notify clients about update
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -24,6 +24,13 @@ self.addEventListener('activate', (event) => {
           .filter((key) => key !== CACHE_NAME)
           .map((key) => caches.delete(key))
       );
+    }).then(() => {
+      // Notify all open clients that a new version is active
+      return self.clients.matchAll({ type: 'window' }).then((clients) => {
+        clients.forEach((client) => {
+          client.postMessage({ type: 'SW_UPDATED', version: CACHE_NAME });
+        });
+      });
     })
   );
   self.clients.claim();

@@ -1,9 +1,18 @@
 import { useDashboardData } from '../utils/hooks';
+import { useQueryClient } from '@tanstack/react-query';
+import { markNotificationRead } from '../utils/supabaseService';
 import NotificationSetup from '../components/NotificationSetup';
 import DebugPanel from '../components/DebugPanel';
 
 export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
-  const { data, isLoading, error } = useDashboardData(isDemo, userInfo);
+  const { data, isLoading, error, refetch, isFetching } = useDashboardData(isDemo, userInfo);
+  const queryClient = useQueryClient();
+
+  const handleSync = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    await queryClient.invalidateQueries({ queryKey: ['history'] });
+    refetch();
+  };
 
   const getPainColor = (pain) => {
     if (pain <= 3) return 'var(--success)';
@@ -42,16 +51,20 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
     );
   }
 
-  const { pod, surgeryDate, todayReport, allReports, alerts, adherence, surveyDone } = data;
+  const { pod, surgeryDate, todayReport, allReports, alerts, adherence, surveyDone, pendingNotifs } = data;
 
   const latestPain = allReports.length > 0
     ? (allReports[0]?.pain_nrs ?? allReports[0]?.pain ?? null)
     : null;
 
-  // Normalize today report pain field
+  // Normalize today report fields
   const todayPain = todayReport?.pain_nrs ?? todayReport?.pain ?? null;
   const todayBleeding = todayReport?.bleeding;
   const todayBowel = todayReport?.bowel;
+  const todayFever = todayReport?.fever;
+  const todayWound = todayReport?.wound;
+  const todayUrinary = todayReport?.urinary;
+  const todayContinence = todayReport?.continence;
 
   return (
     <div className="page">
@@ -121,6 +134,32 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
         </div>
       )}
 
+      {/* Pending Notifications (from server-driven adherence check) */}
+      {pendingNotifs && pendingNotifs.length > 0 && pendingNotifs.map(n => (
+        <div key={n.id} className="alert-banner warning" style={{ position: 'relative' }}>
+          <span className="alert-icon">📬</span>
+          <div className="alert-content">
+            <div className="alert-title">{n.title}</div>
+            <div className="alert-message">{n.message}</div>
+            <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+              {new Date(n.created_at).toLocaleString('zh-TW')}
+            </div>
+          </div>
+          <button
+            onClick={async () => {
+              await markNotificationRead(n.id);
+              refetch();
+            }}
+            style={{
+              position: 'absolute', top: '8px', right: '8px',
+              background: 'none', border: 'none', color: 'var(--text-muted)',
+              cursor: 'pointer', fontSize: '14px', padding: '2px',
+            }}
+            aria-label="dismiss"
+          >✕</button>
+        </div>
+      ))}
+
       {/* Alerts */}
       {alerts.map(alert => (
         <div key={alert.id} className={`alert-banner ${alert.type}`}>
@@ -170,6 +209,34 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
                 {todayBowel}
               </span>
             </div>
+            <div className="symptom-row">
+              <span className="symptom-name">發燒</span>
+              <span className={`symptom-value ${todayFever ? 'danger' : ''}`}>
+                {todayFever ? '是' : '否'}
+              </span>
+            </div>
+            {todayWound && todayWound !== '無異常' && (
+              <div className="symptom-row">
+                <span className="symptom-name">傷口</span>
+                <span className="symptom-value warning">{todayWound}</span>
+              </div>
+            )}
+            {todayUrinary && todayUrinary !== '正常' && (
+              <div className="symptom-row">
+                <span className="symptom-name">排尿</span>
+                <span className={`symptom-value ${todayUrinary === '尿不出來' ? 'danger' : 'warning'}`}>
+                  {todayUrinary}
+                </span>
+              </div>
+            )}
+            {todayContinence && todayContinence !== '正常' && (
+              <div className="symptom-row">
+                <span className="symptom-name">控便</span>
+                <span className={`symptom-value ${todayContinence === '失禁' ? 'danger' : 'warning'}`}>
+                  {todayContinence}
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -209,10 +276,18 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
           <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => onNavigate('history')}>📊 查看紀錄</button>
           <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => onNavigate('chat')}>💬 AI 衛教</button>
         </div>
+        <button
+          className="btn btn-secondary"
+          style={{ marginTop: 'var(--space-sm)', width: '100%', opacity: isFetching ? 0.6 : 1 }}
+          onClick={handleSync}
+          disabled={isFetching}
+        >
+          {isFetching ? '同步中...' : '🔄 重新同步資料'}
+        </button>
       </div>
 
       {/* Notification Settings */}
-      <NotificationSetup />
+      <NotificationSetup studyId={userInfo?.studyId} isDemo={isDemo} />
 
       {/* Dev-only diagnostics for PWA vs web consistency */}
       <DebugPanel userInfo={userInfo} isDemo={isDemo} />

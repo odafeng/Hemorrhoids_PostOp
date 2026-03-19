@@ -161,6 +161,97 @@ INSERT INTO _test_results
     (SELECT COUNT(*) = 0 FROM alerts WHERE study_id = 'TEST-NORM');
 
 -- ============================================================
+-- Test 12: UPDATE (upsert) re-triggers alert evaluation
+-- Scenario: patient had 2 days pain=8, then updates day 3 from pain=3 to pain=9
+-- After update, should trigger high_pain alert
+-- ============================================================
+INSERT INTO patients (study_id, surgery_date, surgery_type, hemorrhoid_grade, age, sex, study_status) VALUES
+  ('TEST-UPD', '2026-03-15', 'excision', 3, 45, 'M', 'active');
+
+INSERT INTO symptom_reports (study_id, report_date, pod, pain_nrs, bleeding, bowel, fever, urinary, continence) VALUES
+  ('TEST-UPD', '2026-03-16', 1, 8, '無', '正常', false, '正常', '正常'),
+  ('TEST-UPD', '2026-03-17', 2, 9, '無', '正常', false, '正常', '正常'),
+  ('TEST-UPD', '2026-03-18', 3, 3, '無', '正常', false, '正常', '正常');
+
+-- No alert yet (day 3 is pain=3, breaks the streak)
+INSERT INTO _test_results
+  SELECT 'update_pre: no alert before update',
+    (SELECT COUNT(*) = 0 FROM alerts WHERE study_id = 'TEST-UPD' AND alert_type = 'high_pain');
+
+-- Now UPDATE day 3 to pain=10 (simulating same-day re-submission via upsert)
+UPDATE symptom_reports SET pain_nrs = 10
+  WHERE study_id = 'TEST-UPD' AND report_date = '2026-03-18';
+
+INSERT INTO _test_results
+  SELECT 'update_post: alert created after UPDATE',
+    (SELECT COUNT(*) = 1 FROM alerts WHERE study_id = 'TEST-UPD' AND alert_type = 'high_pain');
+
+-- ============================================================
+-- Test 13: Duplicate unacknowledged alert NOT created
+-- Scenario: insert another high pain day for TEST-PAIN-H (already has an unacknowledged alert)
+-- ============================================================
+INSERT INTO symptom_reports (study_id, report_date, pod, pain_nrs, bleeding, bowel, fever, urinary, continence) VALUES
+  ('TEST-PAIN-H', '2026-03-19', 4, 10, '無', '正常', false, '正常', '正常');
+
+INSERT INTO _test_results
+  SELECT 'dedup: no duplicate unacknowledged alert',
+    (SELECT COUNT(*) = 1 FROM alerts WHERE study_id = 'TEST-PAIN-H' AND alert_type = 'high_pain');
+
+-- ============================================================
+-- Test 14: After acknowledging, new alert CAN be created
+-- Scenario: acknowledge existing alert, then insert another trigger day
+-- ============================================================
+INSERT INTO patients (study_id, surgery_date, surgery_type, hemorrhoid_grade, age, sex, study_status) VALUES
+  ('TEST-REACK', '2026-03-15', 'excision', 3, 45, 'M', 'active');
+
+-- Create initial high pain alert (3 consecutive days)
+INSERT INTO symptom_reports (study_id, report_date, pod, pain_nrs, bleeding, bowel, fever, urinary, continence) VALUES
+  ('TEST-REACK', '2026-03-16', 1, 8, '無', '正常', false, '正常', '正常'),
+  ('TEST-REACK', '2026-03-17', 2, 9, '無', '正常', false, '正常', '正常'),
+  ('TEST-REACK', '2026-03-18', 3, 10, '無', '正常', false, '正常', '正常');
+
+INSERT INTO _test_results
+  SELECT 'reack_pre: initial alert exists',
+    (SELECT COUNT(*) = 1 FROM alerts WHERE study_id = 'TEST-REACK' AND alert_type = 'high_pain');
+
+-- Acknowledge the alert
+UPDATE alerts SET acknowledged = true WHERE study_id = 'TEST-REACK' AND alert_type = 'high_pain';
+
+-- Insert another high pain day → should create a NEW alert
+INSERT INTO symptom_reports (study_id, report_date, pod, pain_nrs, bleeding, bowel, fever, urinary, continence) VALUES
+  ('TEST-REACK', '2026-03-19', 4, 10, '無', '正常', false, '正常', '正常');
+
+INSERT INTO _test_results
+  SELECT 'reack_post: new alert after acknowledge',
+    (SELECT COUNT(*) = 2 FROM alerts WHERE study_id = 'TEST-REACK' AND alert_type = 'high_pain');
+
+-- ============================================================
+-- Test 15: UPDATE from abnormal → normal should NOT create new alert
+-- Scenario: patient had fever, corrects to no fever
+-- ============================================================
+INSERT INTO patients (study_id, surgery_date, surgery_type, hemorrhoid_grade, age, sex, study_status) VALUES
+  ('TEST-FIXUP', '2026-03-15', 'excision', 3, 45, 'M', 'active');
+
+INSERT INTO symptom_reports (study_id, report_date, pod, pain_nrs, bleeding, bowel, fever, urinary, continence) VALUES
+  ('TEST-FIXUP', '2026-03-18', 1, 3, '無', '正常', true, '正常', '正常');
+
+-- Alert should exist from the INSERT
+INSERT INTO _test_results
+  SELECT 'fixup_pre: fever alert exists',
+    (SELECT COUNT(*) = 1 FROM alerts WHERE study_id = 'TEST-FIXUP' AND alert_type = 'fever');
+
+-- Now correct: it wasn't actually fever
+UPDATE symptom_reports SET fever = false
+  WHERE study_id = 'TEST-FIXUP' AND report_date = '2026-03-18';
+
+-- Alert count should still be 1 (the old one), no new one created
+-- Note: the existing alert persists (acknowledged = false) — that's expected,
+-- the trigger only creates alerts, doesn't retract them
+INSERT INTO _test_results
+  SELECT 'fixup_post: no extra alert after correction',
+    (SELECT COUNT(*) = 1 FROM alerts WHERE study_id = 'TEST-FIXUP' AND alert_type = 'fever');
+
+-- ============================================================
 -- RESULTS
 -- ============================================================
 SELECT test_name, CASE WHEN passed THEN '✅ PASS' ELSE '❌ FAIL' END AS result

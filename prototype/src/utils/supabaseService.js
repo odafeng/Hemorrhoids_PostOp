@@ -325,4 +325,74 @@ export async function reviewChat(chatId, result, notes, reviewedBy) {
     })
     .eq('id', chatId);
   if (error) throw error;
+
+  // Audit trail: researcher review (best-effort, don't throw on failure)
+  try {
+    await supabase.from('audit_trail').insert({
+      actor_role: reviewedBy || 'researcher',
+      action: 'researcher.review_chat',
+      resource: 'ai_chat_logs',
+      resource_id: String(chatId),
+      detail: { review_result: result, has_notes: !!notes },
+    });
+  } catch (e) {
+    console.warn('[reviewChat] audit trail failed:', e);
+  }
+}
+
+// =====================
+// Notification Preferences
+// =====================
+export async function getNotifPrefs(studyId) {
+  const { data, error } = await supabase
+    .from('notification_preferences')
+    .select('*')
+    .eq('study_id', studyId)
+    .maybeSingle();
+  if (error) {
+    console.error('[getNotifPrefs]', error.message);
+    return null;
+  }
+  return data;
+}
+
+export async function upsertNotifPrefs(studyId, prefs) {
+  const { data, error } = await supabase
+    .from('notification_preferences')
+    .upsert({
+      study_id: studyId,
+      enabled: prefs.enabled,
+      hour: prefs.hour,
+      minute: prefs.minute,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'study_id' })
+    .select()
+    .single();
+  if (error) {
+    console.error('[upsertNotifPrefs]', error.message);
+    return null;
+  }
+  return data;
+}
+
+// =====================
+// Pending Notifications
+// =====================
+export async function getPendingNotifications(studyId) {
+  const { data, error } = await supabase
+    .from('pending_notifications')
+    .select('*')
+    .eq('study_id', studyId)
+    .eq('read', false)
+    .order('created_at', { ascending: false });
+  if (error) return [];
+  return data || [];
+}
+
+export async function markNotificationRead(notificationId) {
+  const { error } = await supabase
+    .from('pending_notifications')
+    .update({ read: true })
+    .eq('id', notificationId);
+  if (error) console.error('[markNotificationRead]', error.message);
 }

@@ -9,36 +9,58 @@ import {
   setReminderTime,
   showReminderNotification,
 } from '../utils/notifications';
+import * as sb from '../utils/supabaseService';
 
-export default function NotificationSetup() {
+export default function NotificationSetup({ studyId, isDemo }) {
   const [permission, setPermission] = useState(getNotificationStatus());
   const [enabled, setEnabled] = useState(isNotificationsEnabled());
   const [time, setTime] = useState(getReminderTime());
   const [justEnabled, setJustEnabled] = useState(false);
 
-  // Sync permission state
+  // On mount: load server prefs if available, merge into local state
   useEffect(() => {
     setPermission(getNotificationStatus());
-  }, []);
+    if (!isDemo && studyId) {
+      sb.getNotifPrefs(studyId).then(prefs => {
+        if (prefs) {
+          setEnabled(prefs.enabled);
+          setTime({ hour: prefs.hour, minute: prefs.minute });
+          // Also update localStorage to keep in sync
+          setNotificationsEnabled(prefs.enabled);
+          setReminderTime(prefs.hour, prefs.minute);
+        }
+      });
+    }
+  }, [studyId, isDemo]);
+
+  const syncToServer = (newEnabled, newHour, newMinute) => {
+    if (!isDemo && studyId) {
+      sb.upsertNotifPrefs(studyId, {
+        enabled: newEnabled,
+        hour: newHour,
+        minute: newMinute,
+      });
+    }
+  };
 
   const supported = isNotificationSupported();
 
   const handleToggle = async () => {
     if (!enabled) {
-      // Turning ON — request permission first if needed
       if (permission !== 'granted') {
         const result = await requestPermission();
         setPermission(result);
-        if (result !== 'granted') return; // User denied
+        if (result !== 'granted') return;
       }
       setNotificationsEnabled(true);
       setEnabled(true);
       setJustEnabled(true);
+      syncToServer(true, time.hour, time.minute);
       setTimeout(() => setJustEnabled(false), 2000);
     } else {
-      // Turning OFF
       setNotificationsEnabled(false);
       setEnabled(false);
+      syncToServer(false, time.hour, time.minute);
     }
   };
 
@@ -46,6 +68,7 @@ export default function NotificationSetup() {
     const [h, m] = e.target.value.split(':').map(Number);
     setReminderTime(h, m);
     setTime({ hour: h, minute: m });
+    syncToServer(enabled, h, m);
   };
 
   const handleTestNotification = () => {

@@ -194,6 +194,28 @@ Deno.serve(async (req: Request) => {
       output: data.usage?.output_tokens || 0,
     });
 
+    // Audit trail: AI chat request
+    try {
+      const adminClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+      );
+      await adminClient.from("audit_trail").insert({
+        actor_id: user.id,
+        actor_role: user.user_metadata?.role || "patient",
+        action: "ai.chat_request",
+        resource: "ai_chat_logs",
+        resource_id: user.user_metadata?.study_id || null,
+        detail: {
+          input_tokens: data.usage?.input_tokens || 0,
+          output_tokens: data.usage?.output_tokens || 0,
+          latency_ms: Date.now() - startTime,
+        },
+      });
+    } catch (e) {
+      console.warn("Failed to write AI audit trail:", e);
+    }
+
     return new Response(
       JSON.stringify({ response: aiText, model: data.model }),
       {

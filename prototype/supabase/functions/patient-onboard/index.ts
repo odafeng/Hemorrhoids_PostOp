@@ -165,6 +165,19 @@ Deno.serve(async (req: Request) => {
         .eq("id", invite.id);
     }
 
+    // Audit trail: patient onboarding
+    await adminClient.from("audit_trail").insert({
+      actor_id: user.id,
+      actor_role: "patient",
+      action: "patient.onboard",
+      resource: "patients",
+      resource_id: studyId,
+      detail: {
+        surgery_date: patient.surgery_date,
+        invite_method: invite ? "per_patient_token" : "global_token",
+      },
+    });
+
     return new Response(JSON.stringify({ patient }), {
       status: 201,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
