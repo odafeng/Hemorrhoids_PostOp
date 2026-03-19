@@ -22,6 +22,7 @@ CREATE INDEX IF NOT EXISTS idx_study_invites_token ON study_invites(invite_token
 ALTER TABLE study_invites ENABLE ROW LEVEL SECURITY;
 
 -- Researchers can view and create invites
+DROP POLICY IF EXISTS "researchers_manage_invites" ON study_invites;
 CREATE POLICY "researchers_manage_invites" ON study_invites
     FOR ALL
     USING (get_user_role() IN ('researcher', 'pi'))

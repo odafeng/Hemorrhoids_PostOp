@@ -6,6 +6,7 @@
 ---------------------------------------------------------------------
 -- 1. RLS: all authenticated users can INSERT audit entries
 ---------------------------------------------------------------------
+DROP POLICY IF EXISTS "all_roles_insert_audit" ON audit_trail;
 CREATE POLICY "all_roles_insert_audit" ON audit_trail
     FOR INSERT
     WITH CHECK (get_user_role() IN ('patient', 'researcher', 'pi'));

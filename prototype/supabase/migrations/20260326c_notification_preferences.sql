@@ -13,12 +13,14 @@ CREATE TABLE IF NOT EXISTS notification_preferences (
 ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
 
 -- Patients can read/write own preferences
+DROP POLICY IF EXISTS "patients_own_notif_prefs" ON notification_preferences;
 CREATE POLICY "patients_own_notif_prefs" ON notification_preferences
     FOR ALL
     USING (study_id = get_user_study_id())
     WITH CHECK (study_id = get_user_study_id());
 
 -- Researchers can read all
+DROP POLICY IF EXISTS "researchers_read_notif_prefs" ON notification_preferences;
 CREATE POLICY "researchers_read_notif_prefs" ON notification_preferences
     FOR SELECT
     USING (get_user_role() IN ('researcher', 'pi'));
