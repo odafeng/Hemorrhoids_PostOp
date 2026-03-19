@@ -47,44 +47,37 @@ export default function App() {
 
   // Check auth on mount
   useEffect(() => {
-    // Show escape button if loading takes too long
     const loadingTimer = setTimeout(() => setLoadingTooLong(true), 8000);
 
     const checkAuth = async () => {
       try {
-        // Step 1: get cached session (needed for token)
+        // Step 1: get cached session — render immediately if exists
         const session = await getSession();
         if (!session) {
           setAuthState('loggedOut');
           return;
         }
 
-        // Step 2: try server-verify with timeout (prevents PWA from hanging)
-        let freshUser = null;
+        // Step 2: load user info with cached session FIRST (fast path)
+        await loadUserInfo(session);
+        setAuthState('loggedIn');
+
+        // Step 3: server-verify in background (non-blocking)
+        // If metadata changed, silently update userInfo
         try {
-          const userPromise = supabase.auth.getUser();
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('getUser timeout')), 5000)
-          );
-          const { data: { user }, error } = await Promise.race([userPromise, timeoutPromise]);
-          if (!error && user) {
-            freshUser = user;
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const cachedStudyId = session.user?.user_metadata?.study_id;
+            const freshStudyId = user.user_metadata?.study_id;
+            if (freshStudyId && freshStudyId !== cachedStudyId) {
+              console.warn('[checkAuth] Metadata drift detected, refreshing');
+              const freshSession = { ...session, user: { ...session.user, user_metadata: user.user_metadata } };
+              await loadUserInfo(freshSession);
+            }
           }
         } catch (e) {
-          console.warn('[checkAuth] Server verification failed or timed out:', e.message);
+          console.warn('[checkAuth] Background verify failed (non-fatal):', e.message);
         }
-
-        if (freshUser) {
-          const freshSession = {
-            ...session,
-            user: { ...session.user, user_metadata: freshUser.user_metadata },
-          };
-          await loadUserInfo(freshSession);
-        } else {
-          console.warn('[checkAuth] Using cached session as fallback');
-          await loadUserInfo(session);
-        }
-        setAuthState('loggedIn');
       } catch (e) {
         console.error('[checkAuth] Fatal error:', e);
         setAuthState('loggedOut');
@@ -144,36 +137,28 @@ export default function App() {
     const studyId = session?.user?.user_metadata?.study_id;
     const role = session?.user?.user_metadata?.role || 'patient';
 
-    console.info('[loadUserInfo] start', {
-      email: session?.user?.email,
-      studyId,
-      role,
-      standalone: window.matchMedia('(display-mode: standalone)').matches,
-    });
+    console.info('[loadUserInfo] start', { studyId, role });
 
     if (studyId) {
       let patient = null;
       try {
-        const fetchPatient = async () => {
-          if (role === 'patient') {
-            const inviteToken = sessionStorage.getItem('invite_token');
-            const result = await ensurePatient(studyId, inviteToken);
-            if (inviteToken) sessionStorage.removeItem('invite_token');
-            return result;
-          } else {
-            return await getPatient(studyId);
+        // Fast path: direct DB query (works for returning patients)
+        patient = await getPatient(studyId);
+
+        // Slow path: only call edge function if patient doesn't exist AND we have an invite token
+        if (!patient && role === 'patient') {
+          const inviteToken = sessionStorage.getItem('invite_token');
+          if (inviteToken) {
+            console.info('[loadUserInfo] patient not found, trying onboard edge function');
+            patient = await ensurePatient(studyId, inviteToken);
+            sessionStorage.removeItem('invite_token');
           }
-        };
-        // Timeout: don't let patient fetch hang the whole app
-        const timeoutPromise = new Promise((resolve) =>
-          setTimeout(() => { console.warn('[loadUserInfo] patient fetch timeout'); resolve(null); }, 8000)
-        );
-        patient = await Promise.race([fetchPatient(), timeoutPromise]);
+        }
       } catch (e) {
         console.error('[loadUserInfo] patient fetch error:', e);
       }
 
-      console.info('[loadUserInfo] done', { patient: !!patient, surgeryDate: patient?.surgery_date });
+      console.info('[loadUserInfo] done', { found: !!patient });
 
       setUserInfo({
         studyId,

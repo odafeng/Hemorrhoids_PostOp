@@ -73,26 +73,19 @@ export function useDashboardData(isDemo, userInfo) {
       }
       const surgeryDate = patient.surgery_date;
       const pod = sb.getPODFromDate(surgeryDate);
-      const allReports = await sb.getAllReports(studyId);
-      const todayReport = await sb.getTodayReport(studyId);
 
-      // Alerts: server-side only (from DB trigger fn_check_alerts)
-      const serverAlerts = await sb.getAlerts(studyId);
+      // Parallel fetch: all independent queries at once
+      const [allReports, todayReport, serverAlerts, survey, pendingNotifs] = await Promise.all([
+        sb.getAllReports(studyId),
+        sb.getTodayReport(studyId),
+        sb.getAlerts(studyId),
+        sb.getSurvey(studyId).catch(() => null),
+        sb.getPendingNotifications(studyId).catch(() => []),
+      ]);
+
       const alerts = mapServerAlerts(serverAlerts);
-
       const adherence = calcAdherence(allReports.length, pod);
-
-      let surveyDone = false;
-      try {
-        const survey = await sb.getSurvey(studyId);
-        surveyDone = !!survey;
-      } catch { /* ignore */ }
-
-      // Pending notifications from server-driven check-adherence cron
-      let pendingNotifs = [];
-      try {
-        pendingNotifs = await sb.getPendingNotifications(studyId);
-      } catch { /* ignore */ }
+      const surveyDone = !!survey;
 
       return { pod, surgeryDate, todayReport, allReports, alerts, adherence, surveyDone, pendingNotifs };
     },
