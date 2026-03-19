@@ -145,6 +145,7 @@ Deno.serve(async (req: Request) => {
 
     // --- RAG Retrieval ---
     let ragContext = "";
+    let ragSources: Array<{title: string, source_file: string, similarity: number}> = [];
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (OPENAI_API_KEY) {
       try {
@@ -166,7 +167,7 @@ Deno.serve(async (req: Request) => {
           const queryEmbedding = embData.data?.[0]?.embedding;
 
           if (queryEmbedding) {
-            // 2. Query pgvector for top-3 similar chunks
+            // 2. Query pgvector for top-3 similar chunks (threshold 0.5)
             const adminClient = createClient(
               Deno.env.get("SUPABASE_URL")!,
               Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -175,16 +176,23 @@ Deno.serve(async (req: Request) => {
               "match_documents",
               {
                 query_embedding: JSON.stringify(queryEmbedding),
-                match_threshold: 0.3,
+                match_threshold: 0.5,
                 match_count: 3,
               }
             );
 
             if (!matchError && docs && docs.length > 0) {
-              // 3. Format as context block
-              ragContext = "\n\n---\n以下是衛教知識庫中與病人問題最相關的參考資料，請優先參考這些資訊回答：\n\n"
+              // 3. Store sources for citation
+              ragSources = docs.map((d: { title: string; source_file: string; similarity: number }) => ({
+                title: d.title,
+                source_file: d.source_file,
+                similarity: Math.round(d.similarity * 100) / 100,
+              }));
+
+              // 4. Format as clean plain-text context (no markdown)
+              ragContext = "\n\n---\n以下是衛教知識庫中與病人問題最相關的參考資料，請優先參考這些資訊回答（注意：以下內容為純文字格式，回覆時也請用純文字）：\n\n"
                 + docs.map((d: { title: string; content: string; source_file: string; similarity: number }, i: number) =>
-                  `【參考${i + 1}】${d.title}（來源：${d.source_file}，相似度：${d.similarity.toFixed(2)}）\n${d.content}`
+                  `【參考${i + 1}】${d.title}\n${d.content}`
                 ).join("\n\n");
               console.log(`[RAG] Retrieved ${docs.length} chunks, top similarity: ${docs[0].similarity.toFixed(3)}`);
             } else {
@@ -285,7 +293,11 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ response: aiText, model: data.model }),
+      JSON.stringify({
+        response: aiText,
+        model: data.model,
+        sources: ragSources.length > 0 ? ragSources : undefined,
+      }),
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
