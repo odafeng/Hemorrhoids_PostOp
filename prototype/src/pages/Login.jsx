@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { signIn, signUp } from '../utils/supabaseService';
+import { signIn, signUp, resetPassword } from '../utils/supabaseService';
 
 export default function Login({ onLogin }) {
-  const [mode, setMode] = useState('login'); // 'login' | 'register' | 'demo'
+  const [mode, setMode] = useState('login'); // 'login' | 'register' | 'forgot'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [studyId, setStudyId] = useState('');
@@ -10,6 +10,7 @@ export default function Login({ onLogin }) {
   const [surgeryDate, setSurgeryDate] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -17,7 +18,11 @@ export default function Login({ onLogin }) {
     setLoading(true);
 
     try {
-      if (mode === 'register') {
+      if (mode === 'forgot') {
+        if (!email.trim()) throw new Error('請輸入電子郵件');
+        await resetPassword(email.trim());
+        setResetSent(true);
+      } else if (mode === 'register') {
         // Basic client-side check (real validation happens server-side in patient-onboard)
         if (!inviteCode.trim()) {
           throw new Error('請輸入邀請碼。');
@@ -64,21 +69,33 @@ export default function Login({ onLogin }) {
       <div className="card" style={{ animationDelay: '0.1s' }}>
         {mode !== 'demo' && (
           <>
-            {/* Tab Switch */}
-            <div style={{ display: 'flex', marginBottom: 'var(--space-lg)', gap: 'var(--space-sm)' }}>
-              <button
-                className={`toggle-btn ${mode === 'login' ? 'selected' : ''}`}
-                onClick={() => { setMode('login'); setError(''); }}
-              >
-                登入
-              </button>
-              <button
-                className={`toggle-btn ${mode === 'register' ? 'selected' : ''}`}
-                onClick={() => { setMode('register'); setError(''); }}
-              >
-                註冊
-              </button>
-            </div>
+            {/* Tab Switch — hide in forgot mode */}
+            {mode !== 'forgot' && (
+              <div style={{ display: 'flex', marginBottom: 'var(--space-lg)', gap: 'var(--space-sm)' }}>
+                <button
+                  className={`toggle-btn ${mode === 'login' ? 'selected' : ''}`}
+                  onClick={() => { setMode('login'); setError(''); }}
+                >
+                  登入
+                </button>
+                <button
+                  className={`toggle-btn ${mode === 'register' ? 'selected' : ''}`}
+                  onClick={() => { setMode('register'); setError(''); }}
+                >
+                  註冊
+                </button>
+              </div>
+            )}
+            {mode === 'forgot' && (
+              <div style={{ marginBottom: 'var(--space-lg)' }}>
+                <div style={{ fontSize: 'var(--font-base)', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  重設密碼
+                </div>
+                <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  輸入您的電子郵件，我們會寄送重設連結。
+                </p>
+              </div>
+            )}
 
             <form onSubmit={handleSubmit}>
               {mode === 'register' && (
@@ -132,19 +149,21 @@ export default function Login({ onLogin }) {
                 />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">密碼</label>
-                <input
-                  className="chat-input"
-                  style={{ width: '100%' }}
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                />
-              </div>
+              {mode !== 'forgot' && (
+                <div className="form-group">
+                  <label className="form-label">密碼</label>
+                  <input
+                    className="chat-input"
+                    style={{ width: '100%' }}
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                  />
+                </div>
+              )}
 
               {error && (
                 <div className="alert-banner danger" style={{ marginBottom: 'var(--space-md)' }}>
@@ -160,8 +179,42 @@ export default function Login({ onLogin }) {
                 type="submit"
                 disabled={loading}
               >
-                {loading ? '處理中...' : mode === 'login' ? '登入' : '建立帳號'}
+                {loading ? '處理中...' : mode === 'login' ? '登入' : mode === 'forgot' ? '發送重設連結' : '建立帳號'}
               </button>
+
+              {mode === 'login' && (
+                <button
+                  type="button"
+                  onClick={() => { setMode('forgot'); setError(''); setResetSent(false); }}
+                  style={{
+                    background: 'none', border: 'none', color: 'var(--text-muted)',
+                    fontSize: 'var(--font-xs)', cursor: 'pointer', marginTop: 'var(--space-sm)',
+                    textDecoration: 'underline', width: '100%',
+                  }}
+                >
+                  忘記密碼？
+                </button>
+              )}
+
+              {mode === 'forgot' && resetSent && (
+                <div style={{ color: 'var(--success)', fontSize: 'var(--font-sm)', marginTop: 'var(--space-sm)', textAlign: 'center' }}>
+                  ✓ 重設連結已寄出，請查看您的信箱。
+                </div>
+              )}
+
+              {mode === 'forgot' && (
+                <button
+                  type="button"
+                  onClick={() => { setMode('login'); setError(''); setResetSent(false); }}
+                  style={{
+                    background: 'none', border: 'none', color: 'var(--accent)',
+                    fontSize: 'var(--font-xs)', cursor: 'pointer', marginTop: 'var(--space-sm)',
+                    width: '100%',
+                  }}
+                >
+                  ← 返回登入
+                </button>
+              )}
             </form>
           </>
         )}

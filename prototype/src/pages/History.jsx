@@ -1,8 +1,13 @@
+import { useState } from 'react';
 import { useHistoryData } from '../utils/hooks';
 import { isWoundNormal, formatWound } from '../utils/schemaContract';
+import { useNavigate } from 'react-router-dom';
 
 export default function History({ isDemo, userInfo }) {
   const { data: allReports = [], isLoading, error } = useHistoryData(isDemo, userInfo);
+  const navigate = useNavigate();
+  const today = new Date().toLocaleDateString('en-CA');
+  const [chartRange, setChartRange] = useState(14); // 7, 14, or 0 (all)
 
   // Recalculate POD from surgery date — don't trust stored pod value
   const surgeryDate = userInfo?.surgeryDate;
@@ -29,7 +34,8 @@ export default function History({ isDemo, userInfo }) {
   };
 
   // Simple SVG pain chart
-  const chartReports = [...allReports].sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
+  const sortedForChart = [...allReports].sort((a, b) => a.date.localeCompare(b.date));
+  const chartReports = chartRange > 0 ? sortedForChart.slice(-chartRange) : sortedForChart;
 
   const renderChart = () => {
     if (chartReports.length < 2) return null;
@@ -45,7 +51,26 @@ export default function History({ isDemo, userInfo }) {
 
     return (
       <div className="pain-chart">
-        <div className="chart-title">📈 疼痛趨勢</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+          <div className="chart-title" style={{ marginBottom: 0 }}>📈 疼痛趨勢</div>
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {[7, 14, 0].map(r => (
+              <button
+                key={r}
+                onClick={() => setChartRange(r)}
+                style={{
+                  background: chartRange === r ? 'var(--accent)' : 'var(--bg-glass)',
+                  color: chartRange === r ? '#fff' : 'var(--text-muted)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '4px', padding: '2px 8px',
+                  fontSize: '0.6rem', cursor: 'pointer',
+                }}
+              >
+                {r === 0 ? '全部' : `${r}天`}
+              </button>
+            ))}
+          </div>
+        </div>
         <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="xMidYMid meet">
           <defs>
             <linearGradient id="painGrad" x1="0" y1="0" x2="0" y2="1">
@@ -119,6 +144,15 @@ export default function History({ isDemo, userInfo }) {
                   <span className={`symptom-value ${report.urinary === '尿不出來' ? 'danger' : report.urinary === '困難' ? 'warning' : 'success'}`}>{report.urinary || '—'}</span></div>
                 <div className="symptom-row"><span className="symptom-name">肛門控制</span>
                   <span className={`symptom-value ${report.continence === '失禁' ? 'danger' : report.continence === '滲便' ? 'warning' : 'success'}`}>{report.continence || '—'}</span></div>
+                {report.date === today && (
+                  <button
+                    className="btn btn-secondary"
+                    style={{ marginTop: 'var(--space-sm)', width: '100%', fontSize: 'var(--font-xs)', opacity: 0.8 }}
+                    onClick={() => navigate('/report')}
+                  >
+                    ✏️ 修改此回報
+                  </button>
+                )}
               </div>
             </div>
           );

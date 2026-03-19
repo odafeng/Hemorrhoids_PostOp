@@ -1,5 +1,6 @@
-// Test utility: wraps components in QueryClientProvider
+// Test utility: wraps components in QueryClientProvider + MemoryRouter
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 
 export function createTestQueryClient() {
   return new QueryClient({
@@ -15,5 +16,9 @@ export function createTestQueryClient() {
 
 export function TestQueryWrapper({ children }) {
   const client = createTestQueryClient();
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <MemoryRouter>
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    </MemoryRouter>
+  );
 }

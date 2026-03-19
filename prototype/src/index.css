@@ -75,6 +75,40 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* --- Light Mode --- */
+[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #f1f5f9;
+  --bg-card: rgba(255, 255, 255, 0.9);
+  --bg-card-hover: rgba(241, 245, 249, 0.95);
+  --bg-glass: rgba(0, 0, 0, 0.03);
+  --bg-input: rgba(0, 0, 0, 0.04);
+
+  --accent: #059669;
+  --accent-dim: rgba(5, 150, 105, 0.12);
+  --accent-glow: rgba(5, 150, 105, 0.2);
+  --cyan: #0891b2;
+  --cyan-dim: rgba(8, 145, 178, 0.1);
+
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+
+  --danger: #dc2626;
+  --danger-dim: rgba(220, 38, 38, 0.1);
+  --danger-glow: rgba(220, 38, 38, 0.15);
+  --warning: #d97706;
+  --warning-dim: rgba(217, 119, 6, 0.1);
+  --success: #059669;
+  --success-dim: rgba(5, 150, 105, 0.1);
+
+  --border: rgba(0, 0, 0, 0.08);
+  --border-active: rgba(5, 150, 105, 0.4);
+
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.08);
+  --shadow-glow: 0 0 12px var(--accent-glow);
+}
+
 /* --- Reset & Base --- */
 *, *::before, *::after {
   margin: 0;

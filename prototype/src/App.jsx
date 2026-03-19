@@ -44,6 +44,15 @@ export default function App() {
   const [userInfo, setUserInfo] = useState(null);
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
   const [loadingTooLong, setLoadingTooLong] = useState(false);
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+
+  // Apply theme to document
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
 
   // Check auth on mount
   useEffect(() => {
@@ -326,6 +335,15 @@ export default function App() {
             <span>{tab.label}</span>
           </NavLink>
         ))}
+        <button
+          className="nav-item"
+          onClick={toggleTheme}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontFamily: 'inherit' }}
+          aria-label="切換主題"
+        >
+          <span className="nav-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
+          <span>{theme === 'dark' ? '淺色' : '深色'}</span>
+        </button>
       </nav>
     </>
   );

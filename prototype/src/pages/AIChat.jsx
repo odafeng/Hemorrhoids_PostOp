@@ -117,6 +117,14 @@ export default function AIChat({ isDemo, userInfo }) {
               </div>
             )}
             {msg.text}
+            {msg.role === 'ai' && msg.source !== 'error' && i > 0 && (
+              <div style={{
+                fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '8px',
+                borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '6px',
+              }}>
+                ⚠️ 僅供衛教參考，不構成醫療建議。如有疑慮請聯絡醫療團隊。
+              </div>
+            )}
           </div>
         ))}
         {isTyping && (

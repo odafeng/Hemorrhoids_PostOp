@@ -24,6 +24,11 @@
     <meta name="description" content="痔瘡手術術後症狀回報、規則引擎警示與 AI 衛教系統。結構化每日追蹤疼痛、出血、排便等術後症狀。" />
   </head>
   <body>
+    <script>
+      // Apply saved theme before React hydrates to prevent flash
+      const t = localStorage.getItem('theme');
+      if (t) document.documentElement.setAttribute('data-theme', t);
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
 

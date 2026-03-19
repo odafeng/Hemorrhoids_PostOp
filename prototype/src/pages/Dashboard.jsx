@@ -260,6 +260,13 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout, onSy
                 </span>
               </div>
             )}
+            <button
+              className="btn btn-secondary"
+              style={{ marginTop: 'var(--space-sm)', width: '100%', fontSize: 'var(--font-xs)', opacity: 0.8 }}
+              onClick={() => onNavigate('report')}
+            >
+              ✏️ 修改今日回報
+            </button>
           </div>
         )}
       </div>
