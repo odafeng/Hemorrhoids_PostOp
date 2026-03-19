@@ -279,16 +279,30 @@ export async function getAdherenceSummary() {
 }
 
 export async function getAllReportsForResearcher() {
-  const { data, error } = await supabase
-    .from('symptom_reports')
-    .select('*')
-    .order('study_id', { ascending: true })
-    .order('report_date', { ascending: true });
-  if (error) {
-    console.error('[getAllReportsForResearcher]', error.message);
-    return [];
+  // Supabase default limit is 1000 rows — paginate to get all
+  const PAGE_SIZE = 1000;
+  let allData = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('symptom_reports')
+      .select('*')
+      .order('study_id', { ascending: true })
+      .order('report_date', { ascending: true })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) {
+      console.error('[getAllReportsForResearcher]', error.message);
+      return allData; // return what we have so far
+    }
+
+    allData = allData.concat(data || []);
+    if (!data || data.length < PAGE_SIZE) break; // last page
+    from += PAGE_SIZE;
   }
-  return data || [];
+
+  return allData;
 }
 
 export async function getAllAlertsForResearcher() {

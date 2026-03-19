@@ -144,14 +144,21 @@ Deno.serve(async (req: Request) => {
     }
 
     // Build multi-turn messages from conversation history
+    // Limit: last 10 turns, max 4000 chars total to stay within token budget
     const messages: Array<{role: string, content: string}> = [];
     if (Array.isArray(history) && history.length > 0) {
-      for (const msg of history.slice(-20)) {
+      let totalChars = 0;
+      const MAX_HISTORY_CHARS = 4000;
+      const recentHistory = history.slice(-10);
+      for (const msg of recentHistory) {
+        const content = typeof msg.text === 'string' ? msg.text.slice(0, 500) : '';
+        if (totalChars + content.length > MAX_HISTORY_CHARS) break;
         if (msg.role === 'user') {
-          messages.push({ role: 'user', content: msg.text });
+          messages.push({ role: 'user', content });
         } else if (msg.role === 'ai') {
-          messages.push({ role: 'assistant', content: msg.text });
+          messages.push({ role: 'assistant', content });
         }
+        totalChars += content.length;
       }
     }
     messages.push({ role: "user", content: userMessage });

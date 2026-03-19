@@ -56,7 +56,7 @@ export async function getClaudeResponse(question, options = {}) {
       body.recentSymptoms = recentSymptoms;
     }
     if (conversationHistory.length > 0) {
-      body.history = conversationHistory.slice(-20);
+      body.history = conversationHistory.slice(-10);
     }
 
     // Timeout: prevent infinite "正在回覆中..."

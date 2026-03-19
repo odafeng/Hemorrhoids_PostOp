@@ -12,7 +12,7 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: isCI ? 'npm run preview' : 'npm run dev',
+    command: isCI ? 'npx serve dist -s -l 4173' : 'npm run dev',
     port: isCI ? 4173 : 5173,
     reuseExistingServer: !isCI,
     timeout: 30_000,
