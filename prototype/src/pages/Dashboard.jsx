@@ -32,7 +32,7 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
     const isMissingPatient = error.message?.includes('MISSING_PATIENT') || error.message?.includes('MISSING_SURGERY_DATE');
     return (
       <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-        <div style={{ textAlign: 'center', maxWidth: '300px' }}>
+        <div style={{ textAlign: 'center', maxWidth: '320px' }}>
           <div style={{ fontSize: '2rem', marginBottom: 'var(--space-md)' }}>{isMissingPatient ? '🔄' : '❌'}</div>
           <p style={{ color: 'var(--danger)', marginBottom: 'var(--space-sm)' }}>
             {isMissingPatient ? '尚未完成病人資料同步' : '載入失敗'}
@@ -45,6 +45,20 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
           <button className="btn btn-secondary" style={{ marginTop: 'var(--space-md)' }} onClick={onLogout}>
             重新登入
           </button>
+
+          {/* Diagnostic info — always visible for debugging */}
+          <div style={{
+            marginTop: 'var(--space-lg)', padding: '8px', borderRadius: '6px',
+            background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
+            fontSize: '10px', fontFamily: 'monospace', color: 'var(--text-muted)',
+            textAlign: 'left', lineHeight: 1.6, wordBreak: 'break-all',
+          }}>
+            <div>study_id: {userInfo?.studyId || '(null)'}</div>
+            <div>role: {userInfo?.role || '(null)'}</div>
+            <div>surgeryDate: {userInfo?.surgeryDate || '(null)'}</div>
+            <div>error: {error.message?.substring(0, 120)}</div>
+          </div>
+
           <DebugPanel userInfo={userInfo} isDemo={isDemo} />
         </div>
       </div>

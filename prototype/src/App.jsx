@@ -182,7 +182,14 @@ export default function App() {
       setUserInfo(null);
       setAuthState('loggedOut');
     } else {
-      await signOut();
+      try {
+        await signOut();
+      } catch (e) {
+        console.error('[handleLogout] signOut failed:', e);
+      }
+      // Force state reset even if signOut threw
+      setUserInfo(null);
+      setAuthState('loggedOut');
     }
     navigate('/');
   };
