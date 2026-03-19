@@ -298,6 +298,19 @@ export async function getAdherenceSummary() {
   return data || [];
 }
 
+export async function getAllReportsForResearcher() {
+  const { data, error } = await supabase
+    .from('symptom_reports')
+    .select('*')
+    .order('study_id', { ascending: true })
+    .order('report_date', { ascending: true });
+  if (error) {
+    console.error('[getAllReportsForResearcher]', error.message);
+    return [];
+  }
+  return data || [];
+}
+
 export async function getAllAlertsForResearcher() {
   const { data, error } = await supabase
     .from('alerts')
@@ -305,6 +318,30 @@ export async function getAllAlertsForResearcher() {
     .order('triggered_at', { ascending: false });
   if (error) return [];
   return data || [];
+}
+
+export async function acknowledgeAlert(alertId, acknowledgedBy) {
+  const { error } = await supabase
+    .from('alerts')
+    .update({
+      acknowledged: true,
+      acknowledged_by: acknowledgedBy || 'researcher',
+      acknowledged_at: new Date().toISOString(),
+    })
+    .eq('id', alertId);
+  if (error) {
+    console.error('[acknowledgeAlert]', error.message);
+    throw error;
+  }
+  // Audit trail
+  try {
+    await supabase.from('audit_trail').insert({
+      actor_role: acknowledgedBy || 'researcher',
+      action: 'alert.acknowledge',
+      resource: 'alerts',
+      resource_id: String(alertId),
+    });
+  } catch { /* best-effort */ }
 }
 
 export async function getUnreviewedChats() {

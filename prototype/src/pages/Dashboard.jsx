@@ -1,12 +1,21 @@
+import { useEffect } from 'react';
 import { useDashboardData } from '../utils/hooks';
 import { useQueryClient } from '@tanstack/react-query';
 import { markNotificationRead } from '../utils/supabaseService';
+import { isWoundNormal, formatWound } from '../utils/schemaContract';
 import NotificationSetup from '../components/NotificationSetup';
 import DebugPanel from '../components/DebugPanel';
 
-export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
+export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout, onSyncSurgeryDate }) {
   const { data, isLoading, error, refetch, isFetching } = useDashboardData(isDemo, userInfo);
   const queryClient = useQueryClient();
+
+  // Sync authoritative surgery_date from DB back to userInfo
+  useEffect(() => {
+    if (data?.surgeryDate && onSyncSurgeryDate) {
+      onSyncSurgeryDate(data.surgeryDate);
+    }
+  }, [data?.surgeryDate]);
 
   const handleSync = async () => {
     await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -229,10 +238,10 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
                 {todayFever ? '是' : '否'}
               </span>
             </div>
-            {todayWound && todayWound !== '無異常' && (
+            {todayWound && !isWoundNormal(todayWound) && (
               <div className="symptom-row">
                 <span className="symptom-name">傷口</span>
-                <span className="symptom-value warning">{todayWound}</span>
+                <span className="symptom-value warning">{formatWound(todayWound)}</span>
               </div>
             )}
             {todayUrinary && todayUrinary !== '正常' && (

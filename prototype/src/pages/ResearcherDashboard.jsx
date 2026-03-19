@@ -8,6 +8,7 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
   const [adherence, setAdherence] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [unreviewedCount, setUnreviewedCount] = useState(0);
+  const [ackingId, setAckingId] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -47,6 +48,58 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
     ? (adherence.reduce((sum, a) => sum + Number(a.adherence_pct), 0) / adherence.length).toFixed(1)
     : 0;
   const activeAlerts = alerts.filter(a => !a.acknowledged).length;
+
+  const handleAcknowledge = async (alertId) => {
+    if (isDemo) {
+      setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, acknowledged: true } : a));
+      return;
+    }
+    setAckingId(alertId);
+    try {
+      await sb.acknowledgeAlert(alertId, userInfo?.studyId || 'researcher');
+      setAlerts(prev => prev.map(a => a.id === alertId ? { ...a, acknowledged: true } : a));
+    } catch (err) {
+      console.error('Acknowledge error:', err);
+    } finally {
+      setAckingId(null);
+    }
+  };
+
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportCSV = async () => {
+    setExporting(true);
+    try {
+      const reports = isDemo ? [] : await sb.getAllReportsForResearcher();
+      if (reports.length === 0) {
+        alert('尚無回報資料可匯出');
+        return;
+      }
+      const headers = ['study_id', 'report_date', 'pod', 'pain_nrs', 'bleeding', 'bowel', 'fever', 'wound', 'urinary', 'continence', 'report_source', 'reported_at'];
+      const csv = [
+        headers.join(','),
+        ...reports.map(r => headers.map(h => {
+          const val = r[h];
+          if (val === null || val === undefined) return '';
+          const str = String(val);
+          return str.includes(',') || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str;
+        }).join(','))
+      ].join('\n');
+
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `symptom_reports_${new Date().toLocaleDateString('en-CA')}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('匯出失敗：' + err.message);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Merge patients with adherence
   const patientRows = patients.map(p => {
@@ -125,6 +178,16 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
         </button>
       )}
 
+      {/* Export Button */}
+      <button
+        className="btn btn-secondary delay-5"
+        onClick={handleExportCSV}
+        disabled={exporting}
+        style={{ marginBottom: 'var(--space-lg)', width: '100%' }}
+      >
+        {exporting ? '匯出中...' : '📥 匯出症狀回報 CSV'}
+      </button>
+
       {/* Patient Table */}
       <div className="card delay-5" style={{ padding: 'var(--space-md)' }}>
         <div className="card-header">
@@ -181,15 +244,29 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
             <div className="card-title">警示紀錄</div>
           </div>
           {alerts.map(a => (
-            <div key={a.id} className={`alert-banner ${a.alert_level}`} style={{ marginBottom: 'var(--space-sm)' }}>
+            <div key={a.id} className={`alert-banner ${a.alert_level}`} style={{ marginBottom: 'var(--space-sm)', position: 'relative' }}>
               <span className="alert-icon">{a.alert_level === 'danger' ? '🔴' : '🟡'}</span>
-              <div className="alert-content">
+              <div className="alert-content" style={{ flex: 1 }}>
                 <div className="alert-title">{a.study_id} — {a.alert_type}</div>
                 <div className="alert-message">{a.message}</div>
                 <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                   {a.triggered_at} {a.acknowledged ? '(已確認)' : '(未確認)'}
                 </div>
               </div>
+              {!a.acknowledged && (
+                <button
+                  onClick={() => handleAcknowledge(a.id)}
+                  disabled={ackingId === a.id}
+                  style={{
+                    background: 'var(--bg-glass)', border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-sm)', color: 'var(--success)',
+                    fontSize: '0.65rem', padding: '3px 8px', cursor: 'pointer',
+                    whiteSpace: 'nowrap', alignSelf: 'center',
+                  }}
+                >
+                  {ackingId === a.id ? '...' : '✓ 確認'}
+                </button>
+              )}
             </div>
           ))}
         </div>

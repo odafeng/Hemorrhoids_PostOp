@@ -1,4 +1,5 @@
 import { useHistoryData } from '../utils/hooks';
+import { isWoundNormal, formatWound } from '../utils/schemaContract';
 
 export default function History({ isDemo, userInfo }) {
   const { data: allReports = [], isLoading, error } = useHistoryData(isDemo, userInfo);
@@ -113,7 +114,7 @@ export default function History({ isDemo, userInfo }) {
                 <div className="symptom-row"><span className="symptom-name">發燒</span>
                   <span className={`symptom-value ${report.fever ? 'danger' : 'success'}`}>{report.fever ? '是' : '否'}</span></div>
                 <div className="symptom-row"><span className="symptom-name">傷口</span>
-                  <span className={`symptom-value ${report.wound === '無異常' ? 'success' : 'warning'}`}>{report.wound}</span></div>
+                  <span className={`symptom-value ${isWoundNormal(report.wound) ? 'success' : 'warning'}`}>{formatWound(report.wound)}</span></div>
                 <div className="symptom-row"><span className="symptom-name">排尿</span>
                   <span className={`symptom-value ${report.urinary === '尿不出來' ? 'danger' : report.urinary === '困難' ? 'warning' : 'success'}`}>{report.urinary || '—'}</span></div>
                 <div className="symptom-row"><span className="symptom-name">肛門控制</span>

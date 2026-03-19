@@ -26,3 +26,37 @@ export const DB_COLUMNS = [
 
 // Frontend report keys (what SymptomReport.jsx puts in the report object)
 export const FRONTEND_REPORT_KEYS = Object.values(SYMPTOM_FIELDS).map(f => f.frontendKey);
+
+// =====================
+// Wound field helpers
+// =====================
+// Wound is stored as comma-separated multi-select: "腫脹,分泌物" or "其他:發紅"
+
+/**
+ * Check if wound value represents "normal" (no issues)
+ */
+export function isWoundNormal(wound) {
+  if (!wound) return true;
+  const trimmed = wound.trim();
+  return !trimmed || trimmed === '無異常';
+}
+
+/**
+ * Format raw wound string for display
+ * "腫脹,分泌物" → "腫脹、分泌物"
+ * "其他:發紅" → "其他（發紅）"
+ * "無異常" → "無異常"
+ */
+export function formatWound(wound) {
+  if (!wound || wound.trim() === '無異常') return '無異常';
+  return wound
+    .split(',')
+    .map(w => {
+      const trimmed = w.trim();
+      if (trimmed.startsWith('其他:')) {
+        return `其他（${trimmed.slice(3)}）`;
+      }
+      return trimmed;
+    })
+    .join('、');
+}

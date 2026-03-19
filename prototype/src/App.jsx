@@ -214,6 +214,15 @@ export default function App() {
     isDemo,
     userInfo,
     onLogout: handleLogout,
+    onSyncSurgeryDate: (dbSurgeryDate) => {
+      if (dbSurgeryDate && dbSurgeryDate !== userInfo?.surgeryDate) {
+        setUserInfo(prev => prev ? {
+          ...prev,
+          surgeryDate: dbSurgeryDate,
+          pod: getPODFromDate(dbSurgeryDate),
+        } : prev);
+      }
+    },
   };
 
   // Loading state
