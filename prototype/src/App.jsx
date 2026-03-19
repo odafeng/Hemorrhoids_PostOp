@@ -43,45 +43,54 @@ export default function App() {
   const [isDemo, setIsDemo] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
+  const [loadingTooLong, setLoadingTooLong] = useState(false);
 
   // Check auth on mount
   useEffect(() => {
+    // Show escape button if loading takes too long
+    const loadingTimer = setTimeout(() => setLoadingTooLong(true), 8000);
+
     const checkAuth = async () => {
-      // Step 1: get cached session (needed for token)
-      const session = await getSession();
-      if (!session) {
-        setAuthState('loggedOut');
-        return;
-      }
-
-      // Step 2: try server-verify with timeout (prevents PWA from hanging)
-      let freshUser = null;
       try {
-        const userPromise = supabase.auth.getUser();
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('getUser timeout')), 5000)
-        );
-        const { data: { user }, error } = await Promise.race([userPromise, timeoutPromise]);
-        if (!error && user) {
-          freshUser = user;
+        // Step 1: get cached session (needed for token)
+        const session = await getSession();
+        if (!session) {
+          setAuthState('loggedOut');
+          return;
         }
-      } catch (e) {
-        console.warn('[checkAuth] Server verification failed or timed out:', e.message);
-      }
 
-      if (freshUser) {
-        // Server-verified: use fresh metadata
-        const freshSession = {
-          ...session,
-          user: { ...session.user, user_metadata: freshUser.user_metadata },
-        };
-        await loadUserInfo(freshSession);
-      } else {
-        // Fallback: use cached session (better than stuck on loading)
-        console.warn('[checkAuth] Using cached session as fallback');
-        await loadUserInfo(session);
+        // Step 2: try server-verify with timeout (prevents PWA from hanging)
+        let freshUser = null;
+        try {
+          const userPromise = supabase.auth.getUser();
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('getUser timeout')), 5000)
+          );
+          const { data: { user }, error } = await Promise.race([userPromise, timeoutPromise]);
+          if (!error && user) {
+            freshUser = user;
+          }
+        } catch (e) {
+          console.warn('[checkAuth] Server verification failed or timed out:', e.message);
+        }
+
+        if (freshUser) {
+          const freshSession = {
+            ...session,
+            user: { ...session.user, user_metadata: freshUser.user_metadata },
+          };
+          await loadUserInfo(freshSession);
+        } else {
+          console.warn('[checkAuth] Using cached session as fallback');
+          await loadUserInfo(session);
+        }
+        setAuthState('loggedIn');
+      } catch (e) {
+        console.error('[checkAuth] Fatal error:', e);
+        setAuthState('loggedOut');
+      } finally {
+        clearTimeout(loadingTimer);
       }
-      setAuthState('loggedIn');
     };
     checkAuth();
 
@@ -135,29 +144,37 @@ export default function App() {
     const studyId = session?.user?.user_metadata?.study_id;
     const role = session?.user?.user_metadata?.role || 'patient';
 
-    if (import.meta.env.DEV) {
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-      console.info('[loadUserInfo]', {
-        context: isStandalone ? 'PWA' : 'browser',
-        email: session?.user?.email,
-        userId: session?.user?.id,
-        studyId,
-        role,
-        expiresAt: session?.expires_at ? new Date(session.expires_at * 1000).toISOString() : '(none)',
-      });
-    }
+    console.info('[loadUserInfo] start', {
+      email: session?.user?.email,
+      studyId,
+      role,
+      standalone: window.matchMedia('(display-mode: standalone)').matches,
+    });
 
     if (studyId) {
-      let patient;
-      if (role === 'patient') {
-        // Read invite token stored during registration (if any)
-        const inviteToken = sessionStorage.getItem('invite_token');
-        patient = await ensurePatient(studyId, inviteToken);
-        // Clear after use — token is single-use
-        if (inviteToken) sessionStorage.removeItem('invite_token');
-      } else {
-        patient = await getPatient(studyId);
+      let patient = null;
+      try {
+        const fetchPatient = async () => {
+          if (role === 'patient') {
+            const inviteToken = sessionStorage.getItem('invite_token');
+            const result = await ensurePatient(studyId, inviteToken);
+            if (inviteToken) sessionStorage.removeItem('invite_token');
+            return result;
+          } else {
+            return await getPatient(studyId);
+          }
+        };
+        // Timeout: don't let patient fetch hang the whole app
+        const timeoutPromise = new Promise((resolve) =>
+          setTimeout(() => { console.warn('[loadUserInfo] patient fetch timeout'); resolve(null); }, 8000)
+        );
+        patient = await Promise.race([fetchPatient(), timeoutPromise]);
+      } catch (e) {
+        console.error('[loadUserInfo] patient fetch error:', e);
       }
+
+      console.info('[loadUserInfo] done', { patient: !!patient, surgeryDate: patient?.surgery_date });
+
       setUserInfo({
         studyId,
         role,
@@ -229,6 +246,26 @@ export default function App() {
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '2rem', marginBottom: 'var(--space-md)', animation: 'pulse 1s infinite' }}>🏥</div>
           <p style={{ color: 'var(--text-secondary)' }}>載入中...</p>
+          {loadingTooLong && (
+            <div style={{ marginTop: 'var(--space-lg)' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)', marginBottom: 'var(--space-sm)' }}>
+                載入時間過長，可能是網路問題。
+              </p>
+              <button className="btn btn-secondary" style={{ marginBottom: 'var(--space-sm)' }}
+                onClick={() => window.location.reload()}>
+                重新整理
+              </button>
+              <br />
+              <button className="btn btn-secondary" style={{ fontSize: 'var(--font-xs)', opacity: 0.7 }}
+                onClick={async () => {
+                  try { await signOut(); } catch {}
+                  setUserInfo(null);
+                  setAuthState('loggedOut');
+                }}>
+                回到登入頁
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
