@@ -11,13 +11,24 @@ import {
 } from '../utils/notifications';
 import * as sb from '../utils/supabaseService';
 
+const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY || '';
+
+// Convert URL-safe base64 to Uint8Array for PushManager
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from(rawData, (c) => c.charCodeAt(0));
+}
+
 export default function NotificationSetup({ studyId, isDemo }) {
   const [permission, setPermission] = useState(getNotificationStatus());
   const [enabled, setEnabled] = useState(isNotificationsEnabled());
   const [time, setTime] = useState(getReminderTime());
   const [justEnabled, setJustEnabled] = useState(false);
+  const [pushStatus, setPushStatus] = useState(''); // '', 'subscribing', 'subscribed', 'error'
 
-  // On mount: load server prefs if available, merge into local state
+  // On mount: load server prefs + check existing push subscription
   useEffect(() => {
     setPermission(getNotificationStatus());
     if (!isDemo && studyId) {
@@ -25,13 +36,22 @@ export default function NotificationSetup({ studyId, isDemo }) {
         if (prefs) {
           setEnabled(prefs.enabled);
           setTime({ hour: prefs.hour, minute: prefs.minute });
-          // Also update localStorage to keep in sync
           setNotificationsEnabled(prefs.enabled);
           setReminderTime(prefs.hour, prefs.minute);
         }
       });
+      // Check if already subscribed to push
+      checkPushSubscription();
     }
   }, [studyId, isDemo]);
+
+  const checkPushSubscription = async () => {
+    try {
+      const reg = await navigator.serviceWorker?.ready;
+      const sub = await reg?.pushManager?.getSubscription();
+      setPushStatus(sub ? 'subscribed' : '');
+    } catch { /* ignore */ }
+  };
 
   const syncToServer = (newEnabled, newHour, newMinute) => {
     if (!isDemo && studyId) {
@@ -40,6 +60,47 @@ export default function NotificationSetup({ studyId, isDemo }) {
         hour: newHour,
         minute: newMinute,
       });
+    }
+  };
+
+  const subscribeToPush = async () => {
+    if (!VAPID_PUBLIC_KEY || isDemo || !studyId) return false;
+    try {
+      setPushStatus('subscribing');
+      const reg = await navigator.serviceWorker.ready;
+
+      // Unsubscribe existing if any
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) await existing.unsubscribe();
+
+      const subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+
+      await sb.savePushSubscription(studyId, subscription);
+      setPushStatus('subscribed');
+      console.info('[Push] Subscribed successfully');
+      return true;
+    } catch (e) {
+      console.error('[Push] Subscribe failed:', e);
+      setPushStatus('error');
+      return false;
+    }
+  };
+
+  const unsubscribeFromPush = async () => {
+    try {
+      const reg = await navigator.serviceWorker?.ready;
+      const sub = await reg?.pushManager?.getSubscription();
+      if (sub) {
+        const endpoint = sub.endpoint;
+        await sub.unsubscribe();
+        if (studyId) await sb.removePushSubscription(studyId, endpoint);
+      }
+      setPushStatus('');
+    } catch (e) {
+      console.error('[Push] Unsubscribe failed:', e);
     }
   };
 
@@ -56,11 +117,18 @@ export default function NotificationSetup({ studyId, isDemo }) {
       setEnabled(true);
       setJustEnabled(true);
       syncToServer(true, time.hour, time.minute);
+
+      // Subscribe to Web Push
+      await subscribeToPush();
+
       setTimeout(() => setJustEnabled(false), 2000);
     } else {
       setNotificationsEnabled(false);
       setEnabled(false);
       syncToServer(false, time.hour, time.minute);
+
+      // Unsubscribe from Web Push
+      await unsubscribeFromPush();
     }
   };
 
@@ -77,10 +145,8 @@ export default function NotificationSetup({ studyId, isDemo }) {
 
   const timeValue = `${String(time.hour).padStart(2, '0')}:${String(time.minute).padStart(2, '0')}`;
 
-  // Not supported — don't render
   if (!supported) return null;
 
-  // Permission denied — show info only
   if (permission === 'denied') {
     return (
       <div className="card notif-card">
@@ -110,12 +176,11 @@ export default function NotificationSetup({ studyId, isDemo }) {
           <div className="card-title">每日提醒</div>
           {enabled && (
             <span className="status-badge completed" style={{ fontSize: '0.65rem' }}>
-              ✓ 已開啟
+              {pushStatus === 'subscribed' ? '✓ 推播已開啟' : '✓ 已開啟'}
             </span>
           )}
         </div>
 
-        {/* Toggle switch */}
         <button
           className={`notif-toggle ${enabled ? 'active' : ''}`}
           onClick={handleToggle}
@@ -125,14 +190,12 @@ export default function NotificationSetup({ studyId, isDemo }) {
         </button>
       </div>
 
-      {/* Explanation when off */}
       {!enabled && (
         <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', margin: '8px 0 0' }}>
-          開啟提醒後，系統會在您設定的時間通知您填寫每日症狀回報。
+          開啟後，即使未開啟 App，系統也會在設定時間推播通知提醒您填寫症狀回報。
         </p>
       )}
 
-      {/* Settings when on */}
       {enabled && (
         <div className="notif-settings">
           <div className="notif-time-row">
@@ -156,6 +219,11 @@ export default function NotificationSetup({ studyId, isDemo }) {
               animation: 'fadeIn 0.3s ease',
             }}>
               ✓ 通知已開啟！每天 {timeValue} 若未回報將收到提醒。
+            </div>
+          )}
+          {pushStatus === 'error' && (
+            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--warning)', marginTop: '6px' }}>
+              ⚠ 推播註冊失敗，將使用本機提醒作為備用。
             </div>
           )}
         </div>

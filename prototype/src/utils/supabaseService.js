@@ -400,3 +400,35 @@ export async function markNotificationRead(notificationId) {
     .eq('id', notificationId);
   if (error) console.error('[markNotificationRead]', error.message);
 }
+
+// =====================
+// Push Subscriptions
+// =====================
+export async function savePushSubscription(studyId, subscription) {
+  const sub = subscription.toJSON ? subscription.toJSON() : subscription;
+  const { data, error } = await supabase
+    .from('push_subscriptions')
+    .upsert({
+      study_id: studyId,
+      endpoint: sub.endpoint,
+      keys_p256dh: sub.keys.p256dh,
+      keys_auth: sub.keys.auth,
+      user_agent: navigator.userAgent,
+    }, { onConflict: 'study_id,endpoint' })
+    .select()
+    .single();
+  if (error) {
+    console.error('[savePushSubscription]', error.message);
+    return null;
+  }
+  return data;
+}
+
+export async function removePushSubscription(studyId, endpoint) {
+  const { error } = await supabase
+    .from('push_subscriptions')
+    .delete()
+    .eq('study_id', studyId)
+    .eq('endpoint', endpoint);
+  if (error) console.error('[removePushSubscription]', error.message);
+}

@@ -1,9 +1,10 @@
 // Supabase Edge Function: check-adherence
 // Called by GitHub Actions cron to check daily symptom report adherence
-// Creates pending_notifications for patients who haven't reported today
+// Creates pending_notifications AND sends Web Push to subscribed patients
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { sendPushToMany } from "../_shared/web-push.ts";
 
 Deno.serve(async (req: Request) => {
   // Only allow POST with a secret key (from GitHub Actions)
@@ -22,6 +23,12 @@ Deno.serve(async (req: Request) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const adminClient = createClient(supabaseUrl, serviceKey);
 
+    // VAPID config
+    const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY") || "";
+    const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY") || "";
+    const vapidSubject = Deno.env.get("VAPID_SUBJECT") || "mailto:noreply@example.com";
+    const pushEnabled = vapidPublicKey && vapidPrivateKey;
+
     // Get all active patients
     const { data: patients, error: patientsError } = await adminClient
       .from("patients")
@@ -32,7 +39,10 @@ Deno.serve(async (req: Request) => {
 
     const today = new Date().toISOString().split("T")[0];
     let reminded = 0;
+    let pushed = 0;
+    let pushFailed = 0;
     let skipped = 0;
+    const expiredEndpoints: string[] = [];
 
     for (const patient of patients || []) {
       // Check if patient reported today
@@ -73,14 +83,50 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
-      // Create pending notification
+      const title = "術後追蹤提醒 🏥";
+      const message = `您今天（POD ${pod}）尚未填寫症狀回報，請花 30 秒完成填寫。`;
+
+      // Create pending notification (always, even if push fails)
       await adminClient.from("pending_notifications").insert({
         study_id: patient.study_id,
         type: "reminder",
-        title: "📋 今日症狀回報提醒",
-        message: `您今天（POD ${pod}）尚未填寫症狀回報。`,
+        title: `📋 ${title}`,
+        message,
       });
       reminded++;
+
+      // Send Web Push if VAPID is configured
+      if (pushEnabled) {
+        const { data: subscriptions } = await adminClient
+          .from("push_subscriptions")
+          .select("endpoint, keys_p256dh, keys_auth")
+          .eq("study_id", patient.study_id);
+
+        if (subscriptions && subscriptions.length > 0) {
+          const payload = { title, body: message, tag: "daily-reminder" };
+          const { results, expired } = await sendPushToMany(
+            subscriptions,
+            payload,
+            vapidPublicKey,
+            vapidPrivateKey,
+            vapidSubject,
+          );
+
+          pushed += results.filter((r) => r.success).length;
+          pushFailed += results.filter((r) => !r.success).length;
+          expiredEndpoints.push(...expired);
+        }
+      }
+    }
+
+    // Clean up expired subscriptions
+    if (expiredEndpoints.length > 0) {
+      for (const endpoint of expiredEndpoints) {
+        await adminClient
+          .from("push_subscriptions")
+          .delete()
+          .eq("endpoint", endpoint);
+      }
     }
 
     // Log to audit trail
@@ -88,18 +134,34 @@ Deno.serve(async (req: Request) => {
       actor_role: "system",
       action: "cron.check_adherence",
       resource: "pending_notifications",
-      detail: { date: today, reminded, skipped, total: patients?.length || 0 },
+      detail: {
+        date: today,
+        reminded,
+        pushed,
+        push_failed: pushFailed,
+        expired_cleaned: expiredEndpoints.length,
+        skipped,
+        total: patients?.length || 0,
+        push_enabled: pushEnabled,
+      },
     });
 
     return new Response(
-      JSON.stringify({ date: today, reminded, skipped, total: patients?.length }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
+      JSON.stringify({
+        date: today,
+        reminded,
+        pushed,
+        push_failed: pushFailed,
+        skipped,
+        total: patients?.length,
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
     );
   } catch (err) {
     console.error("check-adherence error:", err);
     return new Response(
       JSON.stringify({ error: "Internal error" }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
 });
