@@ -26,7 +26,7 @@ vi.mock('../../utils/supabaseService', () => ({
 describe('History Page (Demo Mode)', () => {
   const defaultProps = {
     isDemo: true,
-    userInfo: { studyId: 'DEMO-001', pod: 5, role: 'patient' },
+    userInfo: { studyId: 'DEMO-001', pod: 5, role: 'patient', surgeryDate: '2026-03-14' },
   };
 
   it('renders page title', async () => {
@@ -46,7 +46,7 @@ describe('History Page (Demo Mode)', () => {
 
   it('renders timeline items for each report', async () => {
     render(<History {...defaultProps} />, { wrapper: TestQueryWrapper });
-    await waitFor(() => expect(screen.getByText(/POD 0/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/OP ・ 2026-03-14/)).toBeInTheDocument());
     expect(screen.getByText(/POD 4/)).toBeInTheDocument();
   });
 

@@ -77,7 +77,15 @@ export default function SymptomReport({ onComplete, isDemo, userInfo }) {
       if (isDemo) {
         saveLocalReport(report);
       } else {
-        const pod = userInfo?.pod || 0;
+        // Recalculate POD from surgery_date (don't trust cached userInfo.pod)
+        let pod = 0;
+        if (userInfo?.surgeryDate) {
+          const s = new Date(userInfo.surgeryDate);
+          const t = new Date();
+          s.setHours(0, 0, 0, 0);
+          t.setHours(0, 0, 0, 0);
+          pod = Math.max(0, Math.floor((t - s) / (1000 * 60 * 60 * 24)));
+        }
         // Timeout protection: prevent infinite "提交中" in PWA
         const savePromise = sb.saveReport(userInfo.studyId, pod, report);
         const timeoutPromise = new Promise((_, reject) =>

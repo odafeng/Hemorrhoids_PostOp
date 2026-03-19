@@ -114,8 +114,8 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout }) {
           fontSize: '0.75rem', color: 'var(--text-muted)',
           textTransform: 'uppercase', letterSpacing: '2px', marginBottom: 'var(--space-sm)',
         }}>術後天數</div>
-        <div className="card-value" style={{ fontSize: '4rem', letterSpacing: '-2px' }}>{pod}</div>
-        <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', marginTop: '4px' }}>POD {pod}</div>
+        <div className="card-value" style={{ fontSize: '4rem', letterSpacing: '-2px' }}>{pod === 0 ? 'OP' : pod}</div>
+        <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', marginTop: '4px' }}>{pod === 0 ? '手術當日' : `POD ${pod}`}</div>
       </div>
 
       {/* Survey prompt — show when POD >= 14 */}

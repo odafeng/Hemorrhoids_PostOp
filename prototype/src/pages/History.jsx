@@ -3,6 +3,24 @@ import { useHistoryData } from '../utils/hooks';
 export default function History({ isDemo, userInfo }) {
   const { data: allReports = [], isLoading, error } = useHistoryData(isDemo, userInfo);
 
+  // Recalculate POD from surgery date — don't trust stored pod value
+  const surgeryDate = userInfo?.surgeryDate;
+  const calcPod = (reportDate) => {
+    if (!surgeryDate || !reportDate) return null;
+    const s = new Date(surgeryDate);
+    const r = new Date(reportDate);
+    s.setHours(0, 0, 0, 0);
+    r.setHours(0, 0, 0, 0);
+    return Math.max(0, Math.floor((r - s) / (1000 * 60 * 60 * 24)));
+  };
+
+  const formatPod = (reportDate) => {
+    const pod = calcPod(reportDate);
+    if (pod === null) return '—';
+    if (pod === 0) return 'OP';
+    return `POD ${pod}`;
+  };
+
   const getPainColor = (pain) => {
     if (pain <= 3) return 'var(--success)';
     if (pain <= 6) return 'var(--warning)';
@@ -84,7 +102,7 @@ export default function History({ isDemo, userInfo }) {
           const hasAlert = report.pain >= 8 || report.bleeding === '持續' || report.bleeding === '血塊' || report.fever || report.urinary === '尿不出來' || report.continence === '失禁';
           return (
             <div key={report.date} className={`timeline-item ${hasAlert ? 'alert' : ''}`} style={{ animationDelay: `${idx * 0.05}s` }}>
-              <div className="timeline-date">POD {report.pod ?? '—'} ・ {report.date}</div>
+              <div className="timeline-date">{formatPod(report.date)} ・ {report.date}</div>
               <div className={`timeline-card ${hasAlert ? 'has-alert' : ''}`}>
                 <div className="symptom-row"><span className="symptom-name">疼痛</span>
                   <span className="symptom-value" style={{ color: getPainColor(report.pain) }}>{report.pain}/10</span></div>
