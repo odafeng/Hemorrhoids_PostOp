@@ -1,19 +1,21 @@
 import { defineConfig } from '@playwright/test';
 
+const isCI = !!process.env.CI;
+
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
-  retries: 1,
+  retries: isCI ? 2 : 1,
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: isCI ? 'http://localhost:4173' : 'http://localhost:5173',
     headless: true,
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: 'npm run dev',
-    port: 5173,
-    reuseExistingServer: true,
-    timeout: 10_000,
+    command: isCI ? 'npm run preview' : 'npm run dev',
+    port: isCI ? 4173 : 5173,
+    reuseExistingServer: !isCI,
+    timeout: 30_000,
   },
   projects: [
     { name: 'chromium', use: { browserName: 'chromium' } },

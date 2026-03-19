@@ -50,8 +50,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build for preview
+        run: npm run build
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
       - name: Run E2E tests (Demo mode)
         run: npx playwright test
+        env:
+          CI: true

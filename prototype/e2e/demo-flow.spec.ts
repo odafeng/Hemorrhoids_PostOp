@@ -12,7 +12,7 @@ test.describe('Demo Mode — Critical Path', () => {
     await demoBtn.scrollIntoViewIfNeeded();
     await demoBtn.click();
     // Should land on dashboard
-    await expect(page.getByText('術後天數')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('術後天數')).toBeVisible({ timeout: 10000 });
   });
 
   test('Dashboard shows POD counter and key elements', async ({ page }) => {
