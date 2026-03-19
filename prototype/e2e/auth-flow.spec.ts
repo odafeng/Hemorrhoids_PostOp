@@ -1,5 +1,5 @@
 // E2E: Auth mode — real Supabase login, tests report submit + AI chat
-// Requires GitHub Secrets: E2E_EMAIL, E2E_PASSWORD, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+// Requires GitHub Secrets: E2E_EMAIL (patient account), E2E_PASSWORD, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
 import { test, expect } from '@playwright/test';
 
 const email = process.env.E2E_EMAIL || '';
