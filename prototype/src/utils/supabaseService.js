@@ -12,16 +12,6 @@ export async function getSession() {
   return session;
 }
 
-export async function getStudyId() {
-  const session = await getSession();
-  return session?.user?.user_metadata?.study_id || null;
-}
-
-export async function getUserRole() {
-  const session = await getSession();
-  return session?.user?.user_metadata?.role || null;
-}
-
 export async function signIn(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
@@ -195,29 +185,6 @@ export async function getAlerts(studyId) {
     .order('triggered_at', { ascending: false });
   if (error) return [];
   return data || [];
-}
-
-export async function createAlert(studyId, alert) {
-  // Dedup: skip if an unacknowledged alert of the same type already exists
-  const { data: existing } = await supabase
-    .from('alerts')
-    .select('id')
-    .eq('study_id', studyId)
-    .eq('alert_type', alert.id)
-    .eq('acknowledged', false)
-    .limit(1);
-
-  if (existing && existing.length > 0) return; // already exists
-
-  const { error } = await supabase
-    .from('alerts')
-    .insert({
-      study_id: studyId,
-      alert_type: alert.id,
-      alert_level: alert.type,
-      message: alert.message,
-    });
-  if (error) console.error('Error creating alert:', error);
 }
 
 // =====================

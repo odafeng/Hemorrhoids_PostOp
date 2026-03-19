@@ -9,6 +9,7 @@ This document serves as reference for IRB applications and paper methods section
 |--------------------------|------------|----------------------------|-------------------------------------------|
 | `report.submit`          | patient    | DB trigger (INSERT/UPDATE) | Patient submits or updates a symptom report |
 | `alert.create`           | system     | DB trigger (INSERT)        | Alert rule engine creates a new alert      |
+| `alert.acknowledge`      | researcher | Client-side (RLS)          | Researcher acknowledges an alert           |
 | `patient.onboard`        | patient    | Edge Function              | New patient record created via onboarding  |
 | `ai.chat_request`        | patient    | Edge Function              | Patient uses AI 衛教 chatbot              |
 | `researcher.review_chat` | researcher | Client-side (RLS)          | Researcher reviews an AI chat log          |
@@ -33,5 +34,4 @@ Each `audit_trail` row contains:
 |--------------------|------------------------------------------------|
 | `pii.access`       | PI decrypts patient PII — needs trigger on pii_access_log |
 | `pii.export`       | Future CSV export tool                         |
-| `alert.acknowledge` | Researcher acknowledges an alert               |
 | `patient.withdraw`  | Patient withdrawn from study                   |

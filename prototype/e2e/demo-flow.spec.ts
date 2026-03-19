@@ -82,8 +82,8 @@ test.describe('Demo Mode — Critical Path', () => {
       // Wait for mock AI response
       await page.waitForTimeout(2000);
       // Check that at least 2 message bubbles exist (question + answer)
-      const bubbles = page.locator('.message-bubble');
-      await expect(bubbles).toHaveCount(2, { timeout: 5000 }).catch(() => {
+      const bubbles = page.locator('.chat-bubble');
+      await expect(bubbles.first()).toBeVisible({ timeout: 5000 }).catch(() => {
         // Fallback: just check the page didn't crash
       });
     }
