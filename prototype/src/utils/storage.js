@@ -173,7 +173,55 @@ export function getResearcherMockData() {
     { id: 5, study_id: 'HEM-003', user_message: '需要開什麼藥給我嗎？', ai_response: '這個問題需要醫療專業人員提供個別化的回答。建議您聯絡您的醫療團隊或在下次回診時向醫師諮詢。', reviewed: false, review_result: null, created_at: _daysAgo(today, 4) },
   ];
 
-  return { patients, adherence, alerts, chatLogs };
+  // Mock reports for chart rendering
+  const _mockReport = (sid, pod, pain, bl, bw, fv) => ({
+    study_id: sid, pod, pain_nrs: pain, bleeding: bl, bowel: bw, fever: fv,
+    wound: '無異常', urinary: '正常', continence: '正常',
+    report_date: _daysAgo(today, patients.find(p => p.study_id === sid) ?
+      Math.floor((today - new Date(patients.find(p => p.study_id === sid).surgery_date)) / 86400000) - pod : pod),
+  });
+  const reports = [
+    // HEM-001: 18 days, typical recovery
+    _mockReport('HEM-001', 0, 6, '少量', '未排', false),
+    _mockReport('HEM-001', 1, 8, '少量', '未排', false),
+    _mockReport('HEM-001', 2, 9, '持續', '未排', false),
+    _mockReport('HEM-001', 3, 8, '持續', '困難', false),
+    _mockReport('HEM-001', 4, 7, '少量', '困難', false),
+    _mockReport('HEM-001', 5, 6, '少量', '正常', false),
+    _mockReport('HEM-001', 6, 5, '少量', '正常', false),
+    _mockReport('HEM-001', 7, 5, '無', '正常', false),
+    _mockReport('HEM-001', 8, 4, '無', '正常', false),
+    _mockReport('HEM-001', 10, 3, '無', '正常', false),
+    _mockReport('HEM-001', 12, 3, '無', '正常', false),
+    _mockReport('HEM-001', 14, 2, '無', '正常', false),
+    _mockReport('HEM-001', 15, 2, '無', '正常', false),
+    _mockReport('HEM-001', 16, 2, '無', '正常', false),
+    _mockReport('HEM-001', 17, 2, '無', '正常', false),
+    _mockReport('HEM-001', 18, 2, '無', '正常', false),
+    // HEM-002: 12 days, stapled, easier recovery
+    _mockReport('HEM-002', 0, 4, '少量', '未排', false),
+    _mockReport('HEM-002', 1, 5, '少量', '困難', false),
+    _mockReport('HEM-002', 2, 6, '少量', '困難', false),
+    _mockReport('HEM-002', 3, 5, '少量', '正常', false),
+    _mockReport('HEM-002', 4, 4, '無', '正常', false),
+    _mockReport('HEM-002', 5, 3, '無', '正常', false),
+    _mockReport('HEM-002', 6, 2, '無', '正常', false),
+    _mockReport('HEM-002', 7, 1, '無', '正常', false),
+    _mockReport('HEM-002', 10, 1, '無', '正常', false),
+    // HEM-003: 7 days, some issues
+    _mockReport('HEM-003', 0, 5, '少量', '未排', false),
+    _mockReport('HEM-003', 1, 7, '少量', '未排', false),
+    _mockReport('HEM-003', 2, 8, '少量', '未排', true),
+    _mockReport('HEM-003', 3, 7, '少量', '困難', false),
+    _mockReport('HEM-003', 4, 6, '少量', '困難', false),
+    _mockReport('HEM-003', 5, 5, '少量', '正常', false),
+    _mockReport('HEM-003', 6, 4, '無', '正常', false),
+    // HEM-004: 3 days, early stage
+    _mockReport('HEM-004', 0, 5, '少量', '未排', false),
+    _mockReport('HEM-004', 1, 7, '少量', '未排', false),
+  ];
+
+  return { patients, adherence, alerts, chatLogs, reports };
 }
 
 function _daysAgo(base, n) {

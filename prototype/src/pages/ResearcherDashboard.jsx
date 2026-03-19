@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getResearcherMockData } from '../utils/storage';
 import * as sb from '../utils/supabaseService';
+import ResearcherCharts from '../components/ResearcherCharts';
 
 export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLogout }) {
   const [loading, setLoading] = useState(true);
@@ -9,6 +10,7 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
   const [alerts, setAlerts] = useState([]);
   const [unreviewedCount, setUnreviewedCount] = useState(0);
   const [ackingId, setAckingId] = useState(null);
+  const [allReports, setAllReports] = useState([]);
 
   useEffect(() => {
     loadData();
@@ -23,17 +25,20 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
         setAdherence(mock.adherence);
         setAlerts(mock.alerts);
         setUnreviewedCount(mock.chatLogs.filter(c => !c.reviewed).length);
+        setAllReports(mock.reports || []);
       } else {
-        const [pts, adh, alts, chats] = await Promise.all([
+        const [pts, adh, alts, chats, reports] = await Promise.all([
           sb.getAllPatients(),
           sb.getAdherenceSummary(),
           sb.getAllAlertsForResearcher(),
           sb.getUnreviewedChats(),
+          sb.getAllReportsForResearcher(),
         ]);
         setPatients(pts);
         setAdherence(adh);
         setAlerts(alts);
         setUnreviewedCount(chats.length);
+        setAllReports(reports);
       }
     } catch (err) {
       console.error('Researcher data error:', err);
@@ -189,6 +194,11 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
       >
         {exporting ? '匯出中...' : '📥 匯出症狀回報 CSV'}
       </button>
+
+      {/* Charts */}
+      {allReports.length > 0 && (
+        <ResearcherCharts reports={allReports} patients={patients} adherence={adherence} />
+      )}
 
       {/* Patient Table */}
       <div className="card delay-5" style={{ padding: 'var(--space-md)' }}>
