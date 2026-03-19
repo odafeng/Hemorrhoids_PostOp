@@ -22,59 +22,49 @@ const urinaryOptions = [
 const woundOptions = ['無異常', '腫脹', '分泌物', '搔癢', '異物感', '其他'];
 
 export default function SymptomReport({ onComplete, isDemo, userInfo }) {
+  // Synchronous pre-fill for demo mode (prevents empty-form flash)
+  const demoExisting = isDemo ? getTodayReport() : null;
+
+  const parseWound = (raw) => {
+    if (!raw) return { items: [], other: '' };
+    const parts = typeof raw === 'string' ? raw.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const items = parts.map(p => p.startsWith('其他:') ? '其他' : p);
+    const otherPart = parts.find(p => p.startsWith('其他:'));
+    return { items, other: otherPart ? otherPart.slice(3) : '' };
+  };
+
   const [loadingExisting, setLoadingExisting] = useState(!isDemo && !!userInfo?.studyId);
-  const [pain, setPain] = useState(3);
-  const [bleeding, setBleeding] = useState('');
-  const [bowel, setBowel] = useState('');
-  const [fever, setFever] = useState(false);
-  const [continence, setContinence] = useState('');
-  const [urinary, setUrinary] = useState('');
-  const [wound, setWound] = useState([]);
-  const [woundOther, setWoundOther] = useState('');
+  const [pain, setPain] = useState(demoExisting?.pain ?? 3);
+  const [bleeding, setBleeding] = useState(demoExisting?.bleeding ?? '');
+  const [bowel, setBowel] = useState(demoExisting?.bowel ?? '');
+  const [fever, setFever] = useState(demoExisting?.fever ?? false);
+  const [continence, setContinence] = useState(demoExisting?.continence ?? '');
+  const [urinary, setUrinary] = useState(demoExisting?.urinary ?? '');
+  const [wound, setWound] = useState(() => parseWound(demoExisting?.wound).items);
+  const [woundOther, setWoundOther] = useState(() => parseWound(demoExisting?.wound).other);
   const [showSuccess, setShowSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // Pre-fill from existing report (demo or Supabase)
+  // Async pre-fill for Supabase mode only
   useEffect(() => {
+    if (isDemo || !userInfo?.studyId) return;
     const loadExisting = async () => {
-      let existing = null;
-      if (isDemo) {
-        existing = getTodayReport();
-      } else if (userInfo?.studyId) {
-        try {
-          const report = await sb.getTodayReport(userInfo.studyId);
-          if (report) {
-            existing = {
-              pain: report.pain_nrs,
-              bleeding: report.bleeding,
-              bowel: report.bowel,
-              fever: report.fever,
-              wound: report.wound,
-              urinary: report.urinary,
-              continence: report.continence,
-            };
-          }
-        } catch (e) {
-          console.error('[SymptomReport] load existing failed:', e);
+      try {
+        const report = await sb.getTodayReport(userInfo.studyId);
+        if (report) {
+          setPain(report.pain_nrs ?? 3);
+          setBleeding(report.bleeding ?? '');
+          setBowel(report.bowel ?? '');
+          setFever(report.fever ?? false);
+          setContinence(report.continence ?? '');
+          setUrinary(report.urinary ?? '');
+          const { items, other } = parseWound(report.wound);
+          setWound(items);
+          setWoundOther(other);
         }
-      }
-
-      if (existing) {
-        setPain(existing.pain ?? 3);
-        setBleeding(existing.bleeding ?? '');
-        setBowel(existing.bowel ?? '');
-        setFever(existing.fever ?? false);
-        setContinence(existing.continence ?? '');
-        setUrinary(existing.urinary ?? '');
-        if (existing.wound) {
-          const parts = typeof existing.wound === 'string'
-            ? existing.wound.split(',').map(s => s.trim()).filter(Boolean)
-            : [];
-          setWound(parts.map(p => p.startsWith('其他:') ? '其他' : p));
-          const otherPart = parts.find(p => p.startsWith('其他:'));
-          if (otherPart) setWoundOther(otherPart.slice(3));
-        }
+      } catch (e) {
+        console.error('[SymptomReport] load existing failed:', e);
       }
       setLoadingExisting(false);
     };

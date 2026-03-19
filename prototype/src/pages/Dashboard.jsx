@@ -58,7 +58,7 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout, onSy
           {/* Diagnostic info — always visible for debugging */}
           <div style={{
             marginTop: 'var(--space-lg)', padding: '8px', borderRadius: '6px',
-            background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)',
+            background: 'var(--bg-glass)', border: '1px solid var(--border)',
             fontSize: '10px', fontFamily: 'monospace', color: 'var(--text-muted)',
             textAlign: 'left', lineHeight: 1.6, wordBreak: 'break-all',
           }}>

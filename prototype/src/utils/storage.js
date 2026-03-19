@@ -111,7 +111,9 @@ export function seedDemoData() {
   const reports = getAllReports();
   if (reports.length > 0) return; // already have data
 
+  // Normalize to midnight to prevent cross-day issues near midnight
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const surgeryDate = new Date(today);
   surgeryDate.setDate(surgeryDate.getDate() - 5);
   setSurgeryDate(surgeryDate.toLocaleDateString('en-CA'));
@@ -142,6 +144,7 @@ export function seedDemoData() {
 // =====================
 export function getResearcherMockData() {
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
   const patients = [
     { study_id: 'HEM-001', age: 45, sex: 'M', surgery_type: 'hemorrhoidectomy', surgery_date: _daysAgo(today, 18), study_status: 'active' },
     { study_id: 'HEM-002', age: 62, sex: 'F', surgery_type: 'stapled hemorrhoidopexy', surgery_date: _daysAgo(today, 12), study_status: 'active' },

@@ -31,7 +31,7 @@ export default function IOSInstallPrompt() {
       position: 'fixed', bottom: '70px', left: '16px', right: '16px',
       background: 'var(--bg-card)', border: '1px solid var(--border)',
       borderRadius: 'var(--radius-lg)', padding: '16px',
-      boxShadow: '0 4px 24px rgba(0,0,0,0.3)', zIndex: 9998,
+      boxShadow: 'var(--shadow-card)', zIndex: 9998,
       animation: 'slideUp 0.3s ease-out',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

@@ -101,7 +101,7 @@ export default function DebugPanel({ userInfo, isDemo }) {
       border: '1px dashed var(--warning)',
       borderRadius: 'var(--radius-md)',
       padding: 'var(--space-sm)',
-      background: 'rgba(255,200,0,0.05)',
+      background: 'var(--warning-dim)',
       fontSize: '11px',
       fontFamily: 'monospace',
       lineHeight: 1.6,
@@ -118,7 +118,7 @@ export default function DebugPanel({ userInfo, isDemo }) {
     row: {
       display: 'flex',
       justifyContent: 'space-between',
-      borderBottom: '1px dotted rgba(255,255,255,0.1)',
+      borderBottom: '1px dotted var(--border)',
       padding: '2px 0',
     },
     label: { color: 'var(--text-muted)' },
