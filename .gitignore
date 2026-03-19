@@ -3,3 +3,10 @@ IRB/
 
 # Vercel local config
 .vercel/
+
+# Environment variables (API keys, secrets)
+.env
+.env.local
+.env.*.local
+prototype/.env
+prototype/.env.local
