@@ -143,6 +143,62 @@ Deno.serve(async (req: Request) => {
       userMessage += `\n\n[病人近期症狀摘要（去識別化）：${JSON.stringify(recentSymptoms)}]`;
     }
 
+    // --- RAG Retrieval ---
+    let ragContext = "";
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (OPENAI_API_KEY) {
+      try {
+        // 1. Embed the user question
+        const embRes = await fetch("https://api.openai.com/v1/embeddings", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "text-embedding-3-small",
+            input: question.trim().slice(0, 2000),
+          }),
+        });
+
+        if (embRes.ok) {
+          const embData = await embRes.json();
+          const queryEmbedding = embData.data?.[0]?.embedding;
+
+          if (queryEmbedding) {
+            // 2. Query pgvector for top-3 similar chunks
+            const adminClient = createClient(
+              Deno.env.get("SUPABASE_URL")!,
+              Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+            );
+            const { data: docs, error: matchError } = await adminClient.rpc(
+              "match_documents",
+              {
+                query_embedding: JSON.stringify(queryEmbedding),
+                match_threshold: 0.3,
+                match_count: 3,
+              }
+            );
+
+            if (!matchError && docs && docs.length > 0) {
+              // 3. Format as context block
+              ragContext = "\n\n---\n以下是衛教知識庫中與病人問題最相關的參考資料，請優先參考這些資訊回答：\n\n"
+                + docs.map((d: { title: string; content: string; source_file: string; similarity: number }, i: number) =>
+                  `【參考${i + 1}】${d.title}（來源：${d.source_file}，相似度：${d.similarity.toFixed(2)}）\n${d.content}`
+                ).join("\n\n");
+              console.log(`[RAG] Retrieved ${docs.length} chunks, top similarity: ${docs[0].similarity.toFixed(3)}`);
+            } else {
+              console.log("[RAG] No matching documents found", matchError?.message || "");
+            }
+          }
+        } else {
+          console.warn("[RAG] OpenAI embedding failed:", embRes.status);
+        }
+      } catch (ragErr) {
+        console.warn("[RAG] Retrieval failed (non-fatal):", ragErr);
+      }
+    }
+
     // Build multi-turn messages from conversation history
     // Limit: last 10 turns, max 4000 chars total to stay within token budget
     const messages: Array<{role: string, content: string}> = [];
@@ -163,6 +219,11 @@ Deno.serve(async (req: Request) => {
     }
     messages.push({ role: "user", content: userMessage });
 
+    // Inject RAG context into system prompt
+    const systemPrompt = ragContext
+      ? SYSTEM_PROMPT + ragContext
+      : SYSTEM_PROMPT;
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -173,7 +234,7 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 512,
-        system: SYSTEM_PROMPT,
+        system: systemPrompt,
         messages,
       }),
     });
