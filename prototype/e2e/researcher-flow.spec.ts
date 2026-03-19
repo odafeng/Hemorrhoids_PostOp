@@ -52,8 +52,8 @@ test.describe('Researcher — Dashboard & Tools', () => {
 
     // Should show patient info
     await expect(page.getByText('TEST-002')).toBeVisible({ timeout: 10000 });
-    // Should show report data or "no reports" message
-    await expect(page.getByText(/手術日期|查無此病人/)).toBeVisible({ timeout: 10000 });
+    // Should show patient info or not found
+    await expect(page.getByText(/Surgery date|NOT FOUND/)).toBeVisible({ timeout: 10000 });
   });
 
   test('Chat review page loads and shows review UI', async ({ page }) => {
