@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route, Navigate, useNavigate, useLocation, NavLink } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, NavLink } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import SymptomReport from './pages/SymptomReport';
@@ -11,14 +11,15 @@ import ResearcherPatientLookup from './pages/ResearcherPatientLookup';
 import ChatReview from './pages/ChatReview';
 import OfflineBanner from './components/OfflineBanner';
 import IOSInstallPrompt from './components/IOSInstallPrompt';
+import UpdateBanner from './components/UpdateBanner';
+import PageErrorBoundary from './components/PageErrorBoundary';
 import { installGlobalErrorHandlers, initSentry } from './utils/errorLogger';
-import { onAuthStateChange, getSession, getStudyId, getPatient, ensurePatient, getPODFromDate, signOut } from './utils/supabaseService';
-import supabase from './utils/supabaseClient';
-import { seedDemoData, getTodayReport as getLocalTodayReport } from './utils/storage';
+import { useAuth } from './utils/useAuth';
+import { getTodayReport as getLocalTodayReport } from './utils/storage';
 import { startReminderScheduler, stopReminderScheduler } from './utils/notifications';
+import { signOut } from './utils/supabaseService';
 import * as sb from './utils/supabaseService';
 
-// Initialize Sentry + global error handlers for production monitoring
 initSentry();
 installGlobalErrorHandlers();
 
@@ -37,87 +38,29 @@ const researcherTabs = [
 
 export default function App() {
   const navigate = useNavigate();
-  const location = useLocation();
+  const {
+    authState, isDemo, userInfo, loadingTooLong,
+    handleLogin, handleLogout, syncSurgeryDate,
+    setAuthState, setUserInfo,
+  } = useAuth();
+
   const [refreshKey, setRefreshKey] = useState(0);
-  const [authState, setAuthState] = useState('loading');
-  const [isDemo, setIsDemo] = useState(false);
-  const [userInfo, setUserInfo] = useState(null);
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
-  const [loadingTooLong, setLoadingTooLong] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
 
-  // Apply theme to document
+  // Theme
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
-
-  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
-
-  // Check auth on mount
-  useEffect(() => {
-    const loadingTimer = setTimeout(() => setLoadingTooLong(true), 8000);
-
-    const checkAuth = async () => {
-      try {
-        // Step 1: get cached session — render immediately if exists
-        const session = await getSession();
-        if (!session) {
-          setAuthState('loggedOut');
-          return;
-        }
-
-        // Step 2: load user info with cached session FIRST (fast path)
-        await loadUserInfo(session);
-        setAuthState('loggedIn');
-
-        // Step 3: server-verify in background (non-blocking)
-        // If metadata changed, silently update userInfo
-        try {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            const cachedStudyId = session.user?.user_metadata?.study_id;
-            const freshStudyId = user.user_metadata?.study_id;
-            if (freshStudyId && freshStudyId !== cachedStudyId) {
-              console.warn('[checkAuth] Metadata drift detected, refreshing');
-              const freshSession = { ...session, user: { ...session.user, user_metadata: user.user_metadata } };
-              await loadUserInfo(freshSession);
-            }
-          }
-        } catch (e) {
-          console.warn('[checkAuth] Background verify failed (non-fatal):', e.message);
-        }
-      } catch (e) {
-        console.error('[checkAuth] Fatal error:', e);
-        setAuthState('loggedOut');
-      } finally {
-        clearTimeout(loadingTimer);
-      }
-    };
-    checkAuth();
-
-    const { data: { subscription } } = onAuthStateChange(async (_event, session) => {
-      if (session) {
-        await loadUserInfo(session);
-        setAuthState('loggedIn');
-      } else {
-        setAuthState('loggedOut');
-        setUserInfo(null);
-        setIsDemo(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   // Notification scheduler + SW message handler
   useEffect(() => {
     if (authState !== 'loggedIn') return;
 
     const checkReported = async () => {
-      if (isDemo) {
-        return getLocalTodayReport() !== null;
-      } else if (userInfo?.studyId) {
+      if (isDemo) return getLocalTodayReport() !== null;
+      if (userInfo?.studyId) {
         const report = await sb.getTodayReport(userInfo.studyId);
         return report !== null;
       }
@@ -127,12 +70,8 @@ export default function App() {
     startReminderScheduler(checkReported);
 
     const handleSWMessage = (event) => {
-      if (event.data?.type === 'NAVIGATE' && event.data?.url) {
-        navigate(event.data.url);
-      }
-      if (event.data?.type === 'SW_UPDATED') {
-        setShowUpdateBanner(true);
-      }
+      if (event.data?.type === 'NAVIGATE' && event.data?.url) navigate(event.data.url);
+      if (event.data?.type === 'SW_UPDATED') setShowUpdateBanner(true);
     };
     navigator.serviceWorker?.addEventListener('message', handleSWMessage);
 
@@ -142,96 +81,14 @@ export default function App() {
     };
   }, [authState, isDemo, userInfo, navigate]);
 
-  const loadUserInfo = async (session) => {
-    const studyId = session?.user?.user_metadata?.study_id;
-    const role = session?.user?.user_metadata?.role || 'patient';
-    const surgeryDate = session?.user?.user_metadata?.surgery_date || null;
-
-    console.info('[loadUserInfo]', { studyId, role, surgeryDate });
-
-    if (studyId) {
-      // Set userInfo immediately from session metadata — NO DB call
-      // Dashboard's useDashboardData will fetch authoritative patient data
-      setUserInfo({
-        studyId,
-        role,
-        surgeryDate,
-        pod: surgeryDate ? getPODFromDate(surgeryDate) : 0,
-      });
-
-      // Fire-and-forget: onboard new patient if invite token exists
-      const inviteToken = sessionStorage.getItem('invite_token');
-      if (inviteToken && role === 'patient') {
-        sessionStorage.removeItem('invite_token');
-        ensurePatient(studyId, inviteToken).catch(e =>
-          console.error('[loadUserInfo] onboard failed:', e)
-        );
-      }
-    }
-  };
-
-  const handleLogin = (info) => {
-    if (info?.demo) {
-      setIsDemo(true);
-      const role = info.role || 'patient';
-      const isResearcherLogin = role === 'researcher' || role === 'pi';
-      if (!isResearcherLogin) seedDemoData();
-      setUserInfo({
-        studyId: info.studyId || 'DEMO-001',
-        role,
-        surgeryDate: null,
-        pod: 0,
-      });
-      setAuthState('loggedIn');
-      navigate(isResearcherLogin ? '/researcher' : '/');
-    }
-  };
-
-  const handleLogout = async () => {
-    stopReminderScheduler();
-    if (isDemo) {
-      setIsDemo(false);
-      setUserInfo(null);
-      setAuthState('loggedOut');
-    } else {
-      try {
-        await signOut();
-      } catch (e) {
-        console.error('[handleLogout] signOut failed:', e);
-      }
-      // Force state reset even if signOut threw
-      setUserInfo(null);
-      setAuthState('loggedOut');
-    }
-    navigate('/');
-  };
-
-  const handleReportComplete = () => {
-    setRefreshKey(k => k + 1);
-    navigate('/');
-  };
-
-  const handleSurveyComplete = () => {
-    setRefreshKey(k => k + 1);
-    navigate('/');
-  };
-
   const isResearcherRole = userInfo?.role === 'researcher' || userInfo?.role === 'pi';
   const tabs = isResearcherRole ? researcherTabs : patientTabs;
 
   const commonProps = {
     isDemo,
     userInfo,
-    onLogout: handleLogout,
-    onSyncSurgeryDate: (dbSurgeryDate) => {
-      if (dbSurgeryDate && dbSurgeryDate !== userInfo?.surgeryDate) {
-        setUserInfo(prev => prev ? {
-          ...prev,
-          surgeryDate: dbSurgeryDate,
-          pod: getPODFromDate(dbSurgeryDate),
-        } : prev);
-      }
-    },
+    onLogout: () => handleLogout(navigate),
+    onSyncSurgeryDate: syncSurgeryDate,
   };
 
   // Loading state
@@ -247,18 +104,14 @@ export default function App() {
                 載入時間過長，可能是網路問題。
               </p>
               <button className="btn btn-secondary" style={{ marginBottom: 'var(--space-sm)' }}
-                onClick={() => window.location.reload()}>
-                重新整理
-              </button>
+                onClick={() => window.location.reload()}>重新整理</button>
               <br />
               <button className="btn btn-secondary" style={{ fontSize: 'var(--font-xs)', opacity: 0.7 }}
                 onClick={async () => {
                   try { await signOut(); } catch {}
                   setUserInfo(null);
                   setAuthState('loggedOut');
-                }}>
-                回到登入頁
-              </button>
+                }}>回到登入頁</button>
             </div>
           )}
         </div>
@@ -266,31 +119,17 @@ export default function App() {
     );
   }
 
-  // Not logged in
   if (authState === 'loggedOut') {
-    return <Login onLogin={handleLogin} />;
+    return <Login onLogin={(info) => handleLogin(info, navigate)} />;
   }
 
-  // Logged in — URL-based routing
   return (
-    <>      <OfflineBanner />
+    <>
+      <OfflineBanner />
       <IOSInstallPrompt />
-      {showUpdateBanner && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
-          background: 'var(--accent)', color: '#fff', textAlign: 'center',
-          padding: '8px 16px', fontSize: 'var(--font-sm)', display: 'flex',
-          justifyContent: 'center', alignItems: 'center', gap: '8px',
-        }}>
-          <span>系統已更新</span>
-          <button onClick={() => window.location.reload()} style={{
-            background: '#fff', color: 'var(--accent)', border: 'none',
-            borderRadius: '4px', padding: '2px 10px', fontSize: 'var(--font-xs)',
-            cursor: 'pointer', fontWeight: 600,
-          }}>重新載入</button>
-        </div>
-      )}
-      <Routes>
+      <UpdateBanner show={showUpdateBanner} />
+      <PageErrorBoundary>
+        <Routes>
         {/* Patient routes */}
         <Route path="/" element={
           isResearcherRole
@@ -300,16 +139,15 @@ export default function App() {
                 navigate(pathMap[tab] || '/');
               }} {...commonProps} />
         } />
-        <Route path="/report" element={<SymptomReport onComplete={handleReportComplete} {...commonProps} />} />
+        <Route path="/report" element={<SymptomReport onComplete={() => { setRefreshKey(k => k + 1); navigate('/'); }} {...commonProps} />} />
         <Route path="/history" element={<History key={refreshKey} {...commonProps} />} />
         <Route path="/chat" element={<AIChat {...commonProps} />} />
-        <Route path="/survey" element={<UsabilitySurvey onComplete={handleSurveyComplete} {...commonProps} />} />
+        <Route path="/survey" element={<UsabilitySurvey onComplete={() => { setRefreshKey(k => k + 1); navigate('/'); }} {...commonProps} />} />
 
         {/* Researcher routes */}
         <Route path="/researcher" element={
           <ResearcherDashboard key={refreshKey} onNavigate={(tab) => {
-            const pathMap = { chatReview: '/review', lookup: '/lookup' };
-            navigate(pathMap[tab] || '/researcher');
+            navigate({ chatReview: '/review', lookup: '/lookup' }[tab] || '/researcher');
           }} {...commonProps} />
         } />
         <Route path="/lookup" element={<ResearcherPatientLookup onNavigate={(tab) => {
@@ -319,28 +157,22 @@ export default function App() {
           navigate(tab === 'researcherDashboard' ? '/researcher' : '/review');
         }} {...commonProps} />} />
 
-        {/* Catch-all: redirect to home */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </PageErrorBoundary>
 
       <nav className="bottom-nav">
         {tabs.map(tab => (
-          <NavLink
-            key={tab.path}
-            to={tab.path}
+          <NavLink key={tab.path} to={tab.path}
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-            end={tab.path === '/' || tab.path === '/researcher'}
-          >
+            end={tab.path === '/' || tab.path === '/researcher'}>
             <span className="nav-icon">{tab.icon}</span>
             <span>{tab.label}</span>
           </NavLink>
         ))}
-        <button
-          className="nav-item"
-          onClick={toggleTheme}
+        <button className="nav-item" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
           style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontFamily: 'inherit' }}
-          aria-label="切換主題"
-        >
+          aria-label="切換主題">
           <span className="nav-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
           <span>{theme === 'dark' ? '淺色' : '深色'}</span>
         </button>
