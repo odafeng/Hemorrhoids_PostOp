@@ -13,7 +13,7 @@ test.describe('Auth Mode — Report & AI Chat', () => {
     await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10000 });
     await page.getByPlaceholder('your@email.com').fill(email);
     await page.getByPlaceholder('••••••••').fill(password);
-    await page.getByRole('button', { name: '登入' }).click();
+    await page.locator('form').getByRole('button', { name: '登入' }).click();
     await expect(page.getByText('術後天數')).toBeVisible({ timeout: 15000 });
   });
 
