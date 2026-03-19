@@ -147,14 +147,15 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
             </thead>
             <tbody>
               {patientRows.map(row => {
-                const pod = row.surgery_date
+                const podNum = row.surgery_date
                   ? Math.max(0, Math.floor((new Date() - new Date(row.surgery_date)) / 86400000))
-                  : '-';
+                  : null;
+                const podLabel = podNum === null ? '-' : podNum === 0 ? 'OP' : podNum;
                 return (
                   <tr key={row.study_id}>
                     <td style={{ fontWeight: 600, color: 'var(--accent)' }}>{row.study_id}</td>
                     <td>{row.surgery_type === 'stapled hemorrhoidopexy' ? 'Stapled' : 'Open'}</td>
-                    <td>{pod}</td>
+                    <td>{podLabel}</td>
                     <td>{row.total_reports ?? 0}</td>
                     <td style={{
                       color: (row.adherence_pct ?? 0) >= 70 ? 'var(--success)' : 'var(--warning)',

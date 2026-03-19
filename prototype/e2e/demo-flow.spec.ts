@@ -19,7 +19,7 @@ test.describe('Demo Mode — Critical Path', () => {
     await expect(page.getByText('術後天數')).toBeVisible();
     await expect(page.getByText('今日回報')).toBeVisible();
     await expect(page.getByText('回報率')).toBeVisible();
-    await expect(page.getByRole('button', { name: /查看紀錄/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /紀錄/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /AI 衛教/ })).toBeVisible();
     await expect(page.getByRole('button', { name: '登出' })).toBeVisible();
   });
@@ -63,7 +63,7 @@ test.describe('Demo Mode — Critical Path', () => {
   });
 
   test('History page shows reports', async ({ page }) => {
-    const historyBtn = page.getByText(/查看紀錄/);
+    const historyBtn = page.getByText(/紀錄/).first();
     await historyBtn.scrollIntoViewIfNeeded();
     await historyBtn.click();
     await expect(page.getByText('歷史紀錄')).toBeVisible();

@@ -37,7 +37,10 @@ Deno.serve(async (req: Request) => {
 
     if (patientsError) throw patientsError;
 
-    const today = new Date().toISOString().split("T")[0];
+    // Use Taiwan time (UTC+8) for date calculations
+    // Critical: UTC midnight–08:00 would be wrong day in Taiwan
+    const taiwanNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    const today = taiwanNow.toISOString().split("T")[0];
     let reminded = 0;
     let pushed = 0;
     let pushFailed = 0;
@@ -58,13 +61,13 @@ Deno.serve(async (req: Request) => {
         continue; // Already reported
       }
 
-      // Check if we already sent a notification today
+      // Check if we already sent a notification today (Taiwan time)
       const { data: existing } = await adminClient
         .from("pending_notifications")
         .select("id")
         .eq("study_id", patient.study_id)
         .eq("type", "reminder")
-        .gte("created_at", `${today}T00:00:00`)
+        .gte("created_at", `${today}T00:00:00+08:00`)
         .single();
 
       if (existing) {
@@ -84,7 +87,8 @@ Deno.serve(async (req: Request) => {
       }
 
       const title = "術後追蹤提醒 🏥";
-      const message = `您今天（POD ${pod}）尚未填寫症狀回報，請花 30 秒完成填寫。`;
+      const podLabel = pod === 0 ? "手術當日" : `POD ${pod}`;
+      const message = `您今天（${podLabel}）尚未填寫症狀回報，請花 30 秒完成填寫。`;
 
       // Create pending notification (always, even if push fails)
       await adminClient.from("pending_notifications").insert({

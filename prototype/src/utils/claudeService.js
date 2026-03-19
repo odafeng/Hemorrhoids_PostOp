@@ -59,11 +59,17 @@ export async function getClaudeResponse(question, options = {}) {
       body.history = conversationHistory.slice(-20);
     }
 
+    // Timeout: prevent infinite "正在回覆中..."
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
     const res = await fetch(getAIChatUrl(), {
       method: 'POST',
       headers: await getHeaders(),
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -74,7 +80,6 @@ export async function getClaudeResponse(question, options = {}) {
         metadata: { status: res.status, endpoint: getAIChatUrl() },
       });
 
-      // Production: no mock fallback — show honest error
       return {
         text: 'AI 衛教暫時不可用，請稍後再試。如有緊急狀況，請聯絡您的醫療團隊。',
         source: 'error',
@@ -84,17 +89,19 @@ export async function getClaudeResponse(question, options = {}) {
     const data = await res.json();
     return { text: data.response, source: 'claude' };
   } catch (err) {
-    console.error('Claude service error:', err);
+    const isTimeout = err?.name === 'AbortError';
+    console.error('Claude service error:', isTimeout ? 'Request timed out' : err);
     logError(err, {
-      type: 'ai_network_error',
+      type: isTimeout ? 'ai_timeout' : 'ai_network_error',
       severity: 'fatal',
       component: 'ai_chat',
       metadata: { endpoint: getAIChatUrl(), message: err?.message },
     });
 
-    // Production: no mock fallback
     return {
-      text: 'AI 衛教暫時不可用，請稍後再試。如有緊急狀況，請聯絡您的醫療團隊。',
+      text: isTimeout
+        ? 'AI 回覆逾時，請稍後再試。如有緊急狀況，請聯絡您的醫療團隊。'
+        : 'AI 衛教暫時不可用，請稍後再試。如有緊急狀況，請聯絡您的醫療團隊。',
       source: 'error',
     };
   }
