@@ -1,4 +1,4 @@
-// Claude AI Service — calls Supabase Edge Function only
+// Claude AI Service — calls Supabase Edge Function with SSE streaming
 // In production: API failure shows error, no mock fallback (medical safety)
 // In demo mode: uses mockAI directly
 
@@ -9,10 +9,7 @@ const isProduction = !!import.meta.env.VITE_SUPABASE_URL;
 
 function getAIChatUrl() {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  if (!supabaseUrl) {
-    // No Supabase URL = demo/dev mode, there's no AI endpoint
-    return null;
-  }
+  if (!supabaseUrl) return null;
   return `${supabaseUrl}/functions/v1/ai-chat`;
 }
 
@@ -20,9 +17,7 @@ async function getHeaders() {
   const headers = { 'Content-Type': 'application/json' };
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
   if (anonKey) {
-    headers['apikey'] = anonKey; // Required for Supabase routing
-
-    // Send user JWT — no anon fallback in production
+    headers['apikey'] = anonKey;
     const { default: supabase } = await import('./supabaseClient');
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) {
@@ -34,32 +29,25 @@ async function getHeaders() {
 }
 
 /**
- * Get AI response from Claude API via Supabase Edge Function
- * @param {string} question - User's question
- * @param {object} [options] - Optional settings
- * @param {object} [options.recentSymptoms] - Recent symptom summary for context
- * @param {Array}  [options.conversationHistory] - Previous messages for context
- * @param {boolean} [options.isDemo] - Whether in demo mode
- * @returns {Promise<{text: string, source: 'claude'|'mock'|'error'}>}
+ * Get AI response with streaming (SSE)
+ * @param {string} question
+ * @param {object} options
+ * @param {function} onChunk - callback(textSoFar) called on each delta
+ * @returns {Promise<{text: string, source: string}>}
  */
-export async function getClaudeResponse(question, options = {}) {
+export async function getClaudeResponse(question, options = {}, onChunk = null) {
   const { recentSymptoms = null, conversationHistory = [], isDemo = false } = options;
 
-  // Demo mode: always use mock
   if (isDemo || !getAIChatUrl()) {
-    return { text: getMockResponse(question), source: 'mock' };
+    const text = getMockResponse(question);
+    return { text, source: 'mock' };
   }
 
   try {
     const body = { question };
-    if (recentSymptoms) {
-      body.recentSymptoms = recentSymptoms;
-    }
-    if (conversationHistory.length > 0) {
-      body.history = conversationHistory.slice(-10);
-    }
+    if (recentSymptoms) body.recentSymptoms = recentSymptoms;
+    if (conversationHistory.length > 0) body.history = conversationHistory.slice(-10);
 
-    // Timeout: prevent infinite "正在回覆中..."
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
 
@@ -74,30 +62,54 @@ export async function getClaudeResponse(question, options = {}) {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       logError(new Error(`Claude API ${res.status}: ${err.error || 'unknown'}`), {
-        type: 'ai_api_error',
-        severity: 'fatal',
-        component: 'ai_chat',
-        metadata: { status: res.status, endpoint: getAIChatUrl() },
+        type: 'ai_api_error', severity: 'fatal', component: 'ai_chat',
       });
-
       return {
         text: 'AI 衛教暫時不可用，請稍後再試。如有緊急狀況，請聯絡您的醫療團隊。',
         source: 'error',
       };
     }
 
+    // SSE streaming
+    if (onChunk && res.headers.get('content-type')?.includes('text/event-stream')) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let fullText = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+            if (event.type === 'delta' && event.text) {
+              fullText += event.text;
+              onChunk(fullText);
+            }
+          } catch { /* skip */ }
+        }
+      }
+
+      return { text: fullText || '抱歉，目前無法回覆，請稍後再試。', source: 'claude' };
+    }
+
+    // Fallback: non-streaming JSON response
     const data = await res.json();
     return { text: data.response, source: 'claude' };
   } catch (err) {
     const isTimeout = err?.name === 'AbortError';
-    console.error('Claude service error:', isTimeout ? 'Request timed out' : err);
+    console.error('Claude service error:', isTimeout ? 'timeout' : err);
     logError(err, {
       type: isTimeout ? 'ai_timeout' : 'ai_network_error',
-      severity: 'fatal',
-      component: 'ai_chat',
-      metadata: { endpoint: getAIChatUrl(), message: err?.message },
+      severity: 'fatal', component: 'ai_chat',
     });
-
     return {
       text: isTimeout
         ? 'AI 回覆逾時，請稍後再試。如有緊急狀況，請聯絡您的醫療團隊。'

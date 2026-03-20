@@ -103,7 +103,7 @@ Deno.serve(async (req: Request) => {
         latency_ms: Date.now() - startTime,
         status,
         error_message: error || null,
-        model: "claude-sonnet-4-20250514",
+        model: "claude-haiku-4-5-20251001",
         input_tokens: tokens?.input || null,
         output_tokens: tokens?.output || null,
       });
@@ -242,6 +242,8 @@ Deno.serve(async (req: Request) => {
       ? SYSTEM_PROMPT + ragContext
       : SYSTEM_PROMPT;
 
+    const MODEL = "claude-haiku-4-5-20251001";
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -250,8 +252,9 @@ Deno.serve(async (req: Request) => {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: MODEL,
         max_tokens: 512,
+        stream: true,
         system: systemPrompt,
         messages,
       }),
@@ -270,49 +273,106 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const data = await response.json();
-    const aiText =
-      data.content?.[0]?.text || "抱歉，目前無法回覆，請稍後再試。";
+    // Stream SSE to client
+    const encoder = new TextEncoder();
+    let fullText = "";
+    let inputTokens = 0;
+    let outputTokens = 0;
 
-    // Log successful request with token usage
-    await logMetrics("success", undefined, {
-      input: data.usage?.input_tokens || 0,
-      output: data.usage?.output_tokens || 0,
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          const reader = response.body!.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              const jsonStr = line.slice(6).trim();
+              if (jsonStr === "[DONE]") continue;
+
+              try {
+                const event = JSON.parse(jsonStr);
+
+                // Content delta
+                if (event.type === "content_block_delta" && event.delta?.text) {
+                  fullText += event.delta.text;
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "delta", text: event.delta.text })}\n\n`));
+                }
+
+                // Usage from message_delta (final event)
+                if (event.type === "message_delta" && event.usage) {
+                  outputTokens = event.usage.output_tokens || 0;
+                }
+
+                // Usage from message_start
+                if (event.type === "message_start" && event.message?.usage) {
+                  inputTokens = event.message.usage.input_tokens || 0;
+                }
+              } catch {
+                // skip unparseable lines
+              }
+            }
+          }
+
+          // Send final event with metadata
+          const finalEvent = {
+            type: "done",
+            sources: ragSources.length > 0 ? ragSources : undefined,
+            model: MODEL,
+          };
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(finalEvent)}\n\n`));
+          controller.close();
+
+          // Background: logging and audit (non-blocking)
+          logMetrics("success", undefined, { input: inputTokens, output: outputTokens }).catch(() => {});
+
+          try {
+            const adminClient = createClient(
+              Deno.env.get("SUPABASE_URL")!,
+              Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+            );
+            await adminClient.from("audit_trail").insert({
+              actor_id: user.id,
+              actor_role: user.user_metadata?.role || "patient",
+              action: "ai.chat_request",
+              resource: "ai_chat_logs",
+              resource_id: user.user_metadata?.study_id || null,
+              detail: {
+                input_tokens: inputTokens,
+                output_tokens: outputTokens,
+                latency_ms: Date.now() - startTime,
+                model: MODEL,
+              },
+            });
+          } catch (e) {
+            console.warn("Failed to write AI audit trail:", e);
+          }
+        } catch (streamErr) {
+          console.error("Stream error:", streamErr);
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", message: "Stream interrupted" })}\n\n`));
+          controller.close();
+        }
+      },
     });
 
-    // Audit trail: AI chat request
-    try {
-      const adminClient = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-      );
-      await adminClient.from("audit_trail").insert({
-        actor_id: user.id,
-        actor_role: user.user_metadata?.role || "patient",
-        action: "ai.chat_request",
-        resource: "ai_chat_logs",
-        resource_id: user.user_metadata?.study_id || null,
-        detail: {
-          input_tokens: data.usage?.input_tokens || 0,
-          output_tokens: data.usage?.output_tokens || 0,
-          latency_ms: Date.now() - startTime,
-        },
-      });
-    } catch (e) {
-      console.warn("Failed to write AI audit trail:", e);
-    }
-
-    return new Response(
-      JSON.stringify({
-        response: aiText,
-        model: data.model,
-        sources: ragSources.length > 0 ? ragSources : undefined,
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
+    });
   } catch (err) {
     console.error("Edge function error:", err);
     await logMetrics("error", err.message || "Internal error");

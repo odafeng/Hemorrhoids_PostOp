@@ -62,26 +62,44 @@ export default function AIChat({ isDemo, userInfo }) {
     let response;
     let source = 'mock';
     if (isDemo) {
-      // Demo mode — use local keyword matching with simulated delay
       await new Promise(r => setTimeout(r, 600 + Math.random() * 800));
       response = getAIResponse(text);
       source = 'mock';
+
+      const aiMsg = { role: 'ai', text: response, source };
+      setMessages(prev => [...prev, aiMsg]);
     } else {
-      // Supabase mode — use Claude API via Edge Function with conversation history
+      // Streaming: add placeholder AI message, then update it as chunks arrive
+      const aiMsgIndex = messages.length + 1; // +1 for the user msg we just added
+      setMessages(prev => [...prev, { role: 'ai', text: '...', source: 'claude' }]);
+      setIsTyping(false); // Hide typing indicator — streaming text is visible
+
       const history = messages.filter(m => m.role === 'user' || m.role === 'ai');
-      const result = await getClaudeResponse(text.trim(), { conversationHistory: history });
+      const result = await getClaudeResponse(text.trim(), { conversationHistory: history }, (textSoFar) => {
+        // Update the last AI message progressively
+        setMessages(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1] = { role: 'ai', text: textSoFar, source: 'claude' };
+          return updated;
+        });
+      });
+
+      // Final update with complete text
       response = result.text;
       source = result.source;
+      setMessages(prev => {
+        const updated = [...prev];
+        updated[updated.length - 1] = { role: 'ai', text: response, source };
+        return updated;
+      });
     }
 
-    const aiMsg = { role: 'ai', text: response, source };
-    setMessages(prev => [...prev, aiMsg]);
     setIsTyping(false);
 
     // Save
     if (isDemo) {
-      saveChatMessage(userMsg);
-      saveChatMessage(aiMsg);
+      saveChatMessage({ role: 'user', text: text.trim() });
+      saveChatMessage({ role: 'ai', text: response, source });
     } else if (userInfo?.studyId) {
       try {
         await sb.saveChatLog(userInfo.studyId, text.trim(), response);
