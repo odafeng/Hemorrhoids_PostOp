@@ -189,10 +189,20 @@ Deno.serve(async (req: Request) => {
                 similarity: Math.round(d.similarity * 100) / 100,
               }));
 
-              // 4. Format as clean plain-text context (no markdown)
-              ragContext = "\n\n---\n以下是衛教知識庫中與病人問題最相關的參考資料，請優先參考這些資訊回答（注意：以下內容為純文字格式，回覆時也請用純文字）：\n\n"
+              // 4. Strip markdown from content to prevent Claude from mimicking markdown format
+              const stripMd = (text: string) => text
+                .replace(/^#{1,6}\s+/gm, '')      // ## headings
+                .replace(/\*\*(.+?)\*\*/g, '$1')   // **bold**
+                .replace(/\*(.+?)\*/g, '$1')        // *italic*
+                .replace(/^>\s+/gm, '')             // > blockquotes
+                .replace(/^[-*]\s+/gm, '・')        // - list items → ・
+                .replace(/\[(.+?)\]\(.+?\)/g, '$1') // [link](url) → link
+                .replace(/`(.+?)`/g, '$1');          // `code`
+
+              // 5. Format as clean plain-text context
+              ragContext = "\n\n---\n以下是衛教知識庫中與病人問題最相關的參考資料，請優先參考這些資訊回答（注意：回覆時請用純文字，絕對不要使用 Markdown 語法如 ## ** - 等符號）：\n\n"
                 + docs.map((d: { title: string; content: string; source_file: string; similarity: number }, i: number) =>
-                  `【參考${i + 1}】${d.title}\n${d.content}`
+                  `【參考${i + 1}】${d.title}\n${stripMd(d.content)}`
                 ).join("\n\n");
               console.log(`[RAG] Retrieved ${docs.length} chunks, top similarity: ${docs[0].similarity.toFixed(3)}`);
             } else {
