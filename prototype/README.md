@@ -9,10 +9,10 @@ React 19 + Vite 8 前端 + Supabase 後端（Auth / PostgreSQL / Edge Functions 
   ├── Dashboard — POD 計數、今日回報摘要、警示、回報率、推播設定
   ├── SymptomReport — NRS 疼痛、出血、排便、發燒、排尿、控便、傷口
   ├── History — 時間軸 + 疼痛趨勢圖（POD 0 顯示為 OP）
-  └── AIChat — Claude API 衛教聊天（Edge Function proxy）
+  └── AIChat — Claude Haiku API 衛教聊天（RAG + SSE streaming）
 
 研究者（Web）
-  ├── ResearcherDashboard — 收案總覽、依從率、警示、AI 審核
+  ├── ResearcherDashboard — 收案總覽、依從率、警示、AI 審核、數據圖表（疼痛趨勢/依從率/症狀分佈/收案進度）
   ├── ResearcherPatientLookup — 單一病人狀態查詢
   └── ChatReview — AI 對話紀錄審核
 
@@ -73,7 +73,7 @@ node --env-file=.env scripts/ingest-rag.mjs
 
 | 變數 | 說明 |
 |------|------|
-| `CLAUDE_API_KEY` | Anthropic Claude API key（Generation） |
+| `CLAUDE_API_KEY` | Anthropic Claude API key（Haiku, SSE streaming） |
 | `OPENAI_API_KEY` | OpenAI API key（RAG embedding） |
 | `CRON_SECRET` | check-adherence cron 驗證密碼 |
 | `VAPID_PUBLIC_KEY` | Web Push VAPID 公鑰 |
@@ -125,12 +125,16 @@ node --env-file=.env scripts/ingest-rag.mjs  # 重新 ingest 衛教知識庫
 
 ## RAG 衛教知識庫
 
-AI chat 使用 Retrieval-Augmented Generation（RAG）從衛教知識庫檢索相關段落：
+AI chat 使用 Retrieval-Augmented Generation（RAG）從衛教知識庫檢索相關段落，搭配 SSE streaming 逐字顯示：
 
 ```
 病人提問 → OpenAI embedding → pgvector cosine search → top-3 chunks
-        → 注入 Claude system prompt → 回覆（附 citation sources）
+        → stripMd() 去除 markdown → 注入 Claude Haiku system prompt
+        → SSE streaming 逐字回覆（附 citation sources）
 ```
+
+Model: `claude-haiku-4-5-20251001`（RAG grounding 不需要 Sonnet 推理能力，Haiku 快 3-5x、便宜 10x）
+Fallback: RAG 未命中時回覆固定安全模板，不使用模型通用知識
 
 | 來源 | 檔案數 | Chunks |
 |------|--------|--------|
@@ -189,6 +193,15 @@ Client-side `checkAlerts()` 僅用於 Demo mode。
 ```
 
 DB trigger 測試（手動在 SQL Editor 執行）：`supabase/tests/test_alert_triggers.sql`（16 tests，含 UPDATE / dedup / re-trigger / correction）
+
+E2E 測試（Playwright，CI 自動執行）：
+
+```
+3 test files, 14 tests:
+├── demo-flow.spec.ts       — 6 tests（Patient smoke + Researcher smoke，不需 Supabase）
+├── auth-flow.spec.ts       — 4 tests（登入 → 症狀回報 → History 驗資料 → AI 衛教 → 登出）
+└── researcher-flow.spec.ts — 4 tests（研究者登入 → Dashboard → Patient lookup → Chat review → 登出）
+```
 
 ## Schema 來源
 
