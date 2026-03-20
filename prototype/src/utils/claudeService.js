@@ -61,7 +61,7 @@ export async function getClaudeResponse(question, options = {}) {
 
     // Timeout: prevent infinite "正在回覆中..."
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), 30000);
 
     const res = await fetch(getAIChatUrl(), {
       method: 'POST',
