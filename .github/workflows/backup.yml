@@ -19,6 +19,8 @@ jobs:
             echo "::error::SUPABASE_DB_URI secret is not set"
             exit 1
           fi
+          # Force IPv4 — GitHub Actions runners prefer IPv6 but Supabase blocks it
+          echo 'precedence ::ffff:0:0/96 100' | sudo tee /etc/gai.conf > /dev/null
           pg_dump \
             "$DB_URI" \
             --schema=public \
