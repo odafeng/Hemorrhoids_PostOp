@@ -11,34 +11,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client dnsutils
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
       - name: Run pg_dump
-        env:
-          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-          DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
         run: |
-          if [ -z "$DB_HOST" ]; then
-            echo "::error::SUPABASE_DB_HOST secret is not set"
+          if [ -z "$DB_URI" ]; then
+            echo "::error::SUPABASE_DB_URI secret is not set"
             exit 1
           fi
-          # Force IPv4 — GitHub Actions runners can't reach Supabase via IPv6
-          DB_IP=$(dig +short A "$DB_HOST" | head -1)
-          if [ -z "$DB_IP" ]; then
-            echo "::error::Could not resolve $DB_HOST to IPv4"
-            exit 1
-          fi
-          echo "Resolved $DB_HOST → $DB_IP"
           pg_dump \
-            -h "$DB_IP" \
-            -p 5432 \
-            -U postgres \
-            -d postgres \
+            "$DB_URI" \
             --schema=public \
             --no-owner \
             --no-privileges \
             -F c \
             -f "backup_$(date +%Y%m%d).dump"
+        env:
+          DB_URI: ${{ secrets.SUPABASE_DB_URI }}
 
       - name: Upload backup artifact
         uses: actions/upload-artifact@v4
