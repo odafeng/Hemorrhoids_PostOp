@@ -10,8 +10,12 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
 
       - name: Run pg_dump
         run: |
@@ -29,7 +33,7 @@ jobs:
           echo "Resolved $DB_HOST → $DB_IPV4"
           # Replace hostname with IPv4 in URI
           DB_URI_V4=$(echo "$DB_URI" | sed "s|$DB_HOST|$DB_IPV4|")
-          pg_dump \
+          /usr/lib/postgresql/17/bin/pg_dump \
             "$DB_URI_V4" \
             --schema=public \
             --no-owner \
