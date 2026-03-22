@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client dnsutils
 
       - name: Run pg_dump
         env:
@@ -22,8 +22,15 @@ jobs:
             echo "::error::SUPABASE_DB_HOST secret is not set"
             exit 1
           fi
+          # Force IPv4 — GitHub Actions runners can't reach Supabase via IPv6
+          DB_IP=$(dig +short A "$DB_HOST" | head -1)
+          if [ -z "$DB_IP" ]; then
+            echo "::error::Could not resolve $DB_HOST to IPv4"
+            exit 1
+          fi
+          echo "Resolved $DB_HOST → $DB_IP"
           pg_dump \
-            -h "$DB_HOST" \
+            -h "$DB_IP" \
             -p 5432 \
             -U postgres \
             -d postgres \
