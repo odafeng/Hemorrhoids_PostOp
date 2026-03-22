@@ -16,9 +16,14 @@ jobs:
       - name: Run pg_dump
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          DB_HOST: ${{ secrets.SUPABASE_DB_HOST }}
         run: |
+          if [ -z "$DB_HOST" ]; then
+            echo "::error::SUPABASE_DB_HOST secret is not set"
+            exit 1
+          fi
           pg_dump \
-            -h ${{ secrets.SUPABASE_DB_HOST }} \
+            -h "$DB_HOST" \
             -p 5432 \
             -U postgres \
             -d postgres \
@@ -26,7 +31,7 @@ jobs:
             --no-owner \
             --no-privileges \
             -F c \
-            -f backup_$(date +%Y%m%d).dump
+            -f "backup_$(date +%Y%m%d).dump"
 
       - name: Upload backup artifact
         uses: actions/upload-artifact@v4
