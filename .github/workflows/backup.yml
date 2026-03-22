@@ -19,10 +19,18 @@ jobs:
             echo "::error::SUPABASE_DB_URI secret is not set"
             exit 1
           fi
-          # Force IPv4 — GitHub Actions runners prefer IPv6 but Supabase blocks it
-          echo 'precedence ::ffff:0:0/96 100' | sudo tee /etc/gai.conf > /dev/null
+          # Extract hostname from URI and resolve to IPv4
+          DB_HOST=$(echo "$DB_URI" | sed -E 's|.*@([^:]+):.*|\1|')
+          DB_IPV4=$(getent ahostsv4 "$DB_HOST" | head -1 | awk '{print $1}')
+          if [ -z "$DB_IPV4" ]; then
+            echo "::error::Could not resolve $DB_HOST to IPv4"
+            exit 1
+          fi
+          echo "Resolved $DB_HOST → $DB_IPV4"
+          # Replace hostname with IPv4 in URI
+          DB_URI_V4=$(echo "$DB_URI" | sed "s|$DB_HOST|$DB_IPV4|")
           pg_dump \
-            "$DB_URI" \
+            "$DB_URI_V4" \
             --schema=public \
             --no-owner \
             --no-privileges \
