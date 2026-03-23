@@ -1,3 +1,7 @@
+# OS files
+.DS_Store
+Thumbs.db
+
 # IRB documents — confidential, do not commit
 IRB/
 

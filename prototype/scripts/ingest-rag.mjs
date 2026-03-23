@@ -50,59 +50,94 @@ function stripMarkdown(text) {
 // ========================
 
 /**
+ * Split a chunk containing multiple Q&A pairs into individual pairs.
+ * Detects patterns like: **Q: ...** / A: ...
+ */
+function splitQAPairs(text, parentTitle) {
+  // Match Q&A pattern: line starting with Q: (with or without bold markers)
+  const qaParts = text.split(/(?=(?:\*\*)?Q[:：]\s)/);
+  
+  if (qaParts.length <= 1) return null; // No Q&A pairs found
+
+  const pairs = [];
+  for (const part of qaParts) {
+    const cleaned = stripMarkdown(part).trim();
+    if (cleaned.length < 20) continue;
+
+    // Extract question text for title
+    const qMatch = cleaned.match(/^Q[:：]\s*(.+?)(?:\n|$)/);
+    const question = qMatch ? qMatch[1].trim() : '';
+    
+    pairs.push({
+      title: question ? `${parentTitle} — ${question}` : parentTitle,
+      content: cleaned,
+    });
+  }
+
+  return pairs.length > 0 ? pairs : null;
+}
+
+/**
  * Split markdown by ## and ### headings into fine-grained chunks.
- * Each chunk = one ### section (or ## section if no ### children).
+ * Additionally splits FAQ-style Q&A pairs into individual chunks.
  */
 function chunkMarkdown(content, filename) {
   const lines = content.split('\n');
-  const chunks = [];
+  const rawChunks = [];
   let fileTitle = filename;
   let h2Title = null;
   let h3Title = null;
   let currentLines = [];
 
   function flush() {
-    const text = stripMarkdown(currentLines.join('\n')).trim();
-    if (text.length > 30) {
+    const rawText = currentLines.join('\n').trim();
+    if (rawText.length > 30) {
       const titleParts = [fileTitle];
       if (h2Title) titleParts.push(h2Title);
       if (h3Title) titleParts.push(h3Title);
-      chunks.push({
+      rawChunks.push({
         title: titleParts.join(' — '),
-        content: text,
+        rawContent: rawText,
       });
     }
     currentLines = [];
   }
 
   for (const line of lines) {
-    // File-level title
     if (/^# [^#]/.test(line)) {
       fileTitle = line.replace(/^#\s+/, '').trim();
       continue;
     }
-
-    // ## section boundary
     if (/^## [^#]/.test(line)) {
       flush();
       h2Title = line.replace(/^##\s+/, '').trim();
       h3Title = null;
       continue;
     }
-
-    // ### sub-section boundary
     if (/^### [^#]/.test(line)) {
       flush();
       h3Title = line.replace(/^###\s+/, '').trim();
       continue;
     }
-
     currentLines.push(line);
   }
+  flush();
 
-  flush(); // last chunk
+  // Post-process: split chunks with Q&A pairs
+  const chunks = [];
+  for (const raw of rawChunks) {
+    const qaPairs = splitQAPairs(raw.rawContent, raw.title);
+    if (qaPairs) {
+      chunks.push(...qaPairs);
+    } else {
+      chunks.push({
+        title: raw.title,
+        content: stripMarkdown(raw.rawContent),
+      });
+    }
+  }
 
-  // If no sections found, treat entire file as one chunk
+  // Fallback: if no sections found, treat entire file as one chunk
   if (chunks.length === 0 && content.trim().length > 30) {
     chunks.push({
       title: fileTitle,
@@ -114,36 +149,81 @@ function chunkMarkdown(content, filename) {
 }
 
 /**
- * Chunk PDF text by paragraphs (~500 char target).
+ * Chunk PDF text by section headers or paragraphs (~500 char target).
+ * Tries to detect section headers (numbered like "1." or all-caps lines)
+ * for more meaningful splits before falling back to paragraph-based chunking.
  */
 function chunkPdfText(text, filename) {
   const chunks = [];
-  // Split by double newlines (paragraphs)
+  
+  // Try section-based splitting first (common in clinical guidelines)
+  // Look for numbered section headers or lines that look like headings
+  const sections = text.split(/\n(?=(?:\d+\.\s+[A-Z]|[A-Z]{2,}[A-Z\s]{5,}\n))/);
+  
+  if (sections.length > 3) {
+    // Section-based splitting worked
+    for (const section of sections) {
+      const cleaned = section.replace(/\s+/g, ' ').trim();
+      if (cleaned.length < 50) continue;
+      
+      // If section is too long, sub-chunk by paragraphs
+      if (cleaned.length > 1000) {
+        const subChunks = paragraphChunk(cleaned, 500);
+        for (let i = 0; i < subChunks.length; i++) {
+          const firstLine = subChunks[i].split(/[.!?]\s/)[0] || '';
+          chunks.push({
+            title: `${filename} — ${firstLine.slice(0, 80)}`,
+            content: subChunks[i],
+          });
+        }
+      } else {
+        const firstLine = cleaned.split(/[.!?]\s/)[0] || '';
+        chunks.push({
+          title: `${filename} — ${firstLine.slice(0, 80)}`,
+          content: cleaned,
+        });
+      }
+    }
+  }
+  
+  // Fallback: paragraph-based chunking
+  if (chunks.length === 0) {
+    const subChunks = paragraphChunk(text, 500);
+    for (let i = 0; i < subChunks.length; i++) {
+      chunks.push({
+        title: `${filename} — Section ${i + 1}`,
+        content: subChunks[i],
+      });
+    }
+  }
+
+  return chunks;
+}
+
+/** Helper: split text into ~targetSize char chunks by paragraph boundaries */
+function paragraphChunk(text, targetSize) {
   const paragraphs = text.split(/\n{2,}/);
-  let currentChunk = [];
+  const chunks = [];
+  let current = [];
   let currentLen = 0;
-  const TARGET_SIZE = 500;
 
   for (const para of paragraphs) {
     const cleaned = para.replace(/\s+/g, ' ').trim();
-    if (cleaned.length < 20) continue; // skip tiny fragments
+    if (cleaned.length < 20) continue;
 
-    if (currentLen + cleaned.length > TARGET_SIZE && currentChunk.length > 0) {
-      chunks.push(currentChunk.join('\n\n'));
-      currentChunk = [];
+    if (currentLen + cleaned.length > targetSize && current.length > 0) {
+      chunks.push(current.join('\n\n'));
+      current = [];
       currentLen = 0;
     }
-    currentChunk.push(cleaned);
+    current.push(cleaned);
     currentLen += cleaned.length;
   }
-  if (currentChunk.length > 0) {
-    chunks.push(currentChunk.join('\n\n'));
+  if (current.length > 0) {
+    chunks.push(current.join('\n\n'));
   }
 
-  return chunks.map((content, i) => ({
-    title: `${filename} — Section ${i + 1}`,
-    content,
-  }));
+  return chunks;
 }
 
 // ========================
