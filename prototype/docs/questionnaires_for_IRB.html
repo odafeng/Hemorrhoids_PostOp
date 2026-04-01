@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>痔瘡術後照護系統 — 病人問卷內容（IRB 審查用）</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 2cm 2.5cm;
+    }
+    body {
+      font-family: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
+      font-size: 12pt;
+      line-height: 1.8;
+      color: #222;
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 2cm 1cm;
+    }
+    h1 {
+      font-size: 18pt;
+      text-align: center;
+      border-bottom: 2px solid #333;
+      padding-bottom: 10px;
+      margin-bottom: 6px;
+    }
+    .doc-subtitle {
+      text-align: center;
+      font-size: 11pt;
+      color: #555;
+      margin-bottom: 30px;
+    }
+    h2 {
+      font-size: 15pt;
+      margin-top: 36px;
+      margin-bottom: 12px;
+      padding: 6px 12px;
+      background: #f0f0f0;
+      border-left: 4px solid #333;
+    }
+    h3 {
+      font-size: 13pt;
+      margin-top: 24px;
+      margin-bottom: 8px;
+    }
+    .question-block {
+      margin-bottom: 24px;
+      padding-left: 8px;
+    }
+    .question-title {
+      font-weight: 700;
+      font-size: 12pt;
+      margin-bottom: 6px;
+    }
+    .question-meta {
+      font-size: 10pt;
+      color: #666;
+      margin-bottom: 6px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0 16px 0;
+      font-size: 11pt;
+    }
+    th, td {
+      border: 1px solid #999;
+      padding: 6px 10px;
+      text-align: left;
+    }
+    th {
+      background: #e8e8e8;
+      font-weight: 600;
+    }
+    .scale-row {
+      display: flex;
+      gap: 4px;
+      margin: 8px 0;
+    }
+    .scale-cell {
+      flex: 1;
+      text-align: center;
+      border: 1px solid #999;
+      padding: 6px 4px;
+      font-size: 10pt;
+    }
+    .scale-cell.header {
+      background: #e8e8e8;
+      font-weight: 600;
+    }
+    .note {
+      font-size: 10pt;
+      color: #666;
+      margin-top: 4px;
+      padding-left: 12px;
+    }
+    .section-info {
+      font-size: 11pt;
+      color: #444;
+      margin-bottom: 16px;
+      padding: 8px 12px;
+      background: #fafafa;
+      border: 1px solid #ddd;
+    }
+    .slider-visual {
+      display: flex;
+      justify-content: space-between;
+      border: 1px solid #999;
+      margin: 8px 0;
+    }
+    .slider-visual span {
+      flex: 1;
+      text-align: center;
+      padding: 4px 2px;
+      font-size: 10pt;
+      border-right: 1px solid #ccc;
+    }
+    .slider-visual span:last-child {
+      border-right: none;
+    }
+    .checkbox-symbol::before {
+      content: "☐ ";
+    }
+    .page-break {
+      page-break-before: always;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 12px;
+      border-top: 1px solid #ccc;
+      font-size: 9pt;
+      color: #888;
+      text-align: center;
+    }
+    .toc {
+      margin: 20px 0 30px 0;
+      padding: 16px 20px;
+      background: #fafafa;
+      border: 1px solid #ddd;
+    }
+    .toc-title {
+      font-weight: 700;
+      font-size: 13pt;
+      margin-bottom: 8px;
+    }
+    .toc-item {
+      margin: 4px 0;
+      font-size: 11pt;
+    }
+  </style>
+</head>
+<body>
+
+<h1>痔瘡術後照護系統 — 病人問卷內容</h1>
+<div class="doc-subtitle">
+  供 IRB（人體研究倫理委員會）審查用<br>
+  文件產生日期：2026 年 4 月 1 日
+</div>
+
+<div class="toc">
+  <div class="toc-title">目錄</div>
+  <div class="toc-item">一、每日症狀回報問卷（Symptom Report）</div>
+  <div class="toc-item">二、系統可用性問卷（Usability Survey）</div>
+  <div class="toc-item">附錄、臨床警示規則（Alert Rules）</div>
+</div>
+
+<!-- ============================================================ -->
+<h2>一、每日症狀回報問卷</h2>
+<!-- ============================================================ -->
+
+<div class="section-info">
+  <strong>問卷名稱：</strong>症狀回報<br>
+  <strong>施測頻率：</strong>每日一次（術後每天填寫）<br>
+  <strong>預估填答時間：</strong>約 30 秒<br>
+  <strong>填答方式：</strong>手機 APP（PWA）<br>
+  <strong>題數：</strong>7 題<br>
+  <strong>語言：</strong>繁體中文
+</div>
+
+<!-- Q1 -->
+<div class="question-block">
+  <div class="question-title">第 1 題：疼痛分數（NRS 0–10）</div>
+  <div class="question-meta">題型：數值滑桿（Numeric Rating Scale）｜必填</div>
+  <p>請病人以 0 到 10 的數字評估目前疼痛程度。</p>
+  <table>
+    <tr><th>分數</th><th>疼痛程度描述</th></tr>
+    <tr><td>0</td><td>無痛</td></tr>
+    <tr><td>1 – 3</td><td>輕度疼痛</td></tr>
+    <tr><td>4 – 6</td><td>中度疼痛</td></tr>
+    <tr><td>7 – 8</td><td>嚴重疼痛</td></tr>
+    <tr><td>9 – 10</td><td>劇烈疼痛</td></tr>
+  </table>
+  <div class="slider-visual">
+    <span>0<br>無痛</span>
+    <span>1</span><span>2</span><span>3</span><span>4</span>
+    <span>5<br>中度</span>
+    <span>6</span><span>7</span><span>8</span><span>9</span>
+    <span>10<br>劇痛</span>
+  </div>
+</div>
+
+<!-- Q2 -->
+<div class="question-block">
+  <div class="question-title">第 2 題：出血程度</div>
+  <div class="question-meta">題型：單選（附說明文字）｜必填</div>
+  <table>
+    <tr><th>選項</th><th>說明</th></tr>
+    <tr><td>無</td><td>無任何出血</td></tr>
+    <tr><td>少量</td><td>擦拭時見血、點狀血跡</td></tr>
+    <tr><td>持續</td><td>排便後滴血、馬桶水變色</td></tr>
+    <tr><td>血塊</td><td>可見血塊排出</td></tr>
+  </table>
+</div>
+
+<!-- Q3 -->
+<div class="question-block">
+  <div class="question-title">第 3 題：排便狀況</div>
+  <div class="question-meta">題型：單選｜必填</div>
+  <table>
+    <tr><th>選項</th></tr>
+    <tr><td>正常</td></tr>
+    <tr><td>困難</td></tr>
+    <tr><td>未排</td></tr>
+  </table>
+</div>
+
+<!-- Q4 -->
+<div class="question-block">
+  <div class="question-title">第 4 題：肛門控制</div>
+  <div class="question-meta">題型：單選（附說明文字）｜必填</div>
+  <table>
+    <tr><th>選項</th><th>顯示標籤</th><th>說明</th></tr>
+    <tr><td>正常</td><td>正常</td><td>可以控制</td></tr>
+    <tr><td>滲便</td><td>偶爾滲漏</td><td>內褲有少量污漬、不自覺漏出</td></tr>
+    <tr><td>失禁</td><td>無法控制</td><td>來不及上廁所、大量漏出</td></tr>
+  </table>
+</div>
+
+<!-- Q5 -->
+<div class="question-block">
+  <div class="question-title">第 5 題：發燒（體溫 ≥ 38°C）</div>
+  <div class="question-meta">題型：二元選擇（是／否）｜必填</div>
+  <table>
+    <tr><th>選項</th></tr>
+    <tr><td>否</td></tr>
+    <tr><td>是</td></tr>
+  </table>
+</div>
+
+<!-- Q6 -->
+<div class="question-block">
+  <div class="question-title">第 6 題：排尿狀況</div>
+  <div class="question-meta">題型：單選（附說明文字）｜必填</div>
+  <table>
+    <tr><th>選項</th><th>顯示標籤</th><th>說明</th></tr>
+    <tr><td>正常</td><td>正常</td><td>排尿順暢</td></tr>
+    <tr><td>困難</td><td>不太順</td><td>尿得出來但要等或要用力</td></tr>
+    <tr><td>尿不出來</td><td>完全尿不出來</td><td>想尿但完全排不出，腹部脹痛</td></tr>
+  </table>
+</div>
+
+<!-- Q7 -->
+<div class="question-block">
+  <div class="question-title">第 7 題：傷口狀況（可複選）</div>
+  <div class="question-meta">題型：多選（Checkbox）｜必填（至少選一項）</div>
+  <table>
+    <tr><th>選項</th><th>備註</th></tr>
+    <tr><td>☐ 無異常</td><td>選此項時其他選項自動取消</td></tr>
+    <tr><td>☐ 腫脹</td><td></td></tr>
+    <tr><td>☐ 分泌物</td><td></td></tr>
+    <tr><td>☐ 搔癢</td><td></td></tr>
+    <tr><td>☐ 異物感</td><td></td></tr>
+    <tr><td>☐ 其他</td><td>勾選後須填寫文字說明（必填）</td></tr>
+  </table>
+  <div class="note">※ 若選擇「其他」，會出現文字輸入欄位，提示文字為「請描述傷口狀況...」</div>
+</div>
+
+<!-- ============================================================ -->
+<h2 class="page-break">二、系統可用性問卷</h2>
+<!-- ============================================================ -->
+
+<div class="section-info">
+  <strong>問卷名稱：</strong>系統可用性問卷<br>
+  <strong>施測時機：</strong>術後第 14 天（含）以後，出現一次性填答提示<br>
+  <strong>施測次數：</strong>僅填答一次<br>
+  <strong>預估填答時間：</strong>約 1 分鐘<br>
+  <strong>填答方式：</strong>手機 APP（PWA）<br>
+  <strong>題數：</strong>5 題 Likert 量表 ＋ 1 題開放式（選填）<br>
+  <strong>語言：</strong>繁體中文
+</div>
+
+<h3>量表說明</h3>
+<p>以下 5 題皆採用五點 Likert 量表，選項如下：</p>
+<table>
+  <tr>
+    <th>分數</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th>
+  </tr>
+  <tr>
+    <td><strong>意義</strong></td>
+    <td>非常不同意</td><td>不同意</td><td>普通</td><td>同意</td><td>非常同意</td>
+  </tr>
+</table>
+
+<h3>題目內容</h3>
+
+<div class="question-block">
+  <div class="question-title">第 1 題：易用性</div>
+  <p>📱 我覺得這個系統容易使用</p>
+  <table>
+    <tr>
+      <td style="text-align:center">☐ 1<br><small>非常不同意</small></td>
+      <td style="text-align:center">☐ 2<br><small>不同意</small></td>
+      <td style="text-align:center">☐ 3<br><small>普通</small></td>
+      <td style="text-align:center">☐ 4<br><small>同意</small></td>
+      <td style="text-align:center">☐ 5<br><small>非常同意</small></td>
+    </tr>
+  </table>
+</div>
+
+<div class="question-block">
+  <div class="question-title">第 2 題：有用性</div>
+  <p>💡 這個系統對我的術後恢復有幫助</p>
+  <table>
+    <tr>
+      <td style="text-align:center">☐ 1<br><small>非常不同意</small></td>
+      <td style="text-align:center">☐ 2<br><small>不同意</small></td>
+      <td style="text-align:center">☐ 3<br><small>普通</small></td>
+      <td style="text-align:center">☐ 4<br><small>同意</small></td>
+      <td style="text-align:center">☐ 5<br><small>非常同意</small></td>
+    </tr>
+  </table>
+</div>
+
+<div class="question-block">
+  <div class="question-title">第 3 題：滿意度</div>
+  <p>😊 整體而言，我對這個系統感到滿意</p>
+  <table>
+    <tr>
+      <td style="text-align:center">☐ 1<br><small>非常不同意</small></td>
+      <td style="text-align:center">☐ 2<br><small>不同意</small></td>
+      <td style="text-align:center">☐ 3<br><small>普通</small></td>
+      <td style="text-align:center">☐ 4<br><small>同意</small></td>
+      <td style="text-align:center">☐ 5<br><small>非常同意</small></td>
+    </tr>
+  </table>
+</div>
+
+<div class="question-block">
+  <div class="question-title">第 4 題：推薦意願</div>
+  <p>👍 我會推薦其他病人使用這個系統</p>
+  <table>
+    <tr>
+      <td style="text-align:center">☐ 1<br><small>非常不同意</small></td>
+      <td style="text-align:center">☐ 2<br><small>不同意</small></td>
+      <td style="text-align:center">☐ 3<br><small>普通</small></td>
+      <td style="text-align:center">☐ 4<br><small>同意</small></td>
+      <td style="text-align:center">☐ 5<br><small>非常同意</small></td>
+    </tr>
+  </table>
+</div>
+
+<div class="question-block">
+  <div class="question-title">第 5 題：整體評分</div>
+  <p>⭐ 整體評分</p>
+  <table>
+    <tr>
+      <td style="text-align:center">☐ 1<br><small>非常不同意</small></td>
+      <td style="text-align:center">☐ 2<br><small>不同意</small></td>
+      <td style="text-align:center">☐ 3<br><small>普通</small></td>
+      <td style="text-align:center">☐ 4<br><small>同意</small></td>
+      <td style="text-align:center">☐ 5<br><small>非常同意</small></td>
+    </tr>
+  </table>
+</div>
+
+<div class="question-block">
+  <div class="question-title">第 6 題：開放式意見（選填）</div>
+  <div class="question-meta">題型：開放式文字輸入｜非必填</div>
+  <p>💬 您的建議或意見（選填）</p>
+  <div style="border: 1px solid #999; padding: 12px; min-height: 60px; color: #999; font-size: 10pt;">
+    請分享您使用系統的心得或改進建議...
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<h2 class="page-break">附錄：臨床警示規則</h2>
+<!-- ============================================================ -->
+
+<div class="section-info">
+  以下為系統根據每日症狀回報自動觸發的臨床警示規則，供 IRB 了解資料如何被運用。<br>
+  當病人回報觸發以下條件時，系統會自動通知臨床團隊。
+</div>
+
+<table>
+  <tr>
+    <th>編號</th><th>警示名稱</th><th>觸發條件</th>
+  </tr>
+  <tr>
+    <td>1</td>
+    <td>高度疼痛<br>(high_pain)</td>
+    <td>疼痛分數 ≥ 8，連續 3 天以上</td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>疼痛上升趨勢<br>(ascending_pain)</td>
+    <td>疼痛分數連續 3 天遞增</td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td>持續出血<br>(persistent_bleeding)</td>
+    <td>出血程度為「持續」，連續 2 天以上</td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td>血塊<br>(blood_clot)</td>
+    <td>出血程度為「血塊」，任何單次出現</td>
+  </tr>
+  <tr>
+    <td>5</td>
+    <td>未排便<br>(no_bowel)</td>
+    <td>排便狀況為「未排」，連續 3 天以上</td>
+  </tr>
+  <tr>
+    <td>6</td>
+    <td>發燒<br>(fever)</td>
+    <td>回答「是」（體溫 ≥ 38°C），任何單次出現</td>
+  </tr>
+  <tr>
+    <td>7</td>
+    <td>尿滯留<br>(urinary_retention)</td>
+    <td>排尿狀況為「尿不出來」，任何單次出現</td>
+  </tr>
+  <tr>
+    <td>8</td>
+    <td>排尿困難<br>(urinary_difficulty)</td>
+    <td>排尿狀況為「困難」，連續 2 天以上</td>
+  </tr>
+  <tr>
+    <td>9</td>
+    <td>失禁<br>(incontinence)</td>
+    <td>肛門控制為「失禁」，任何單次出現</td>
+  </tr>
+  <tr>
+    <td>10</td>
+    <td>滲便<br>(soiling)</td>
+    <td>肛門控制為「滲便」，連續 2 天以上</td>
+  </tr>
+</table>
+
+<div class="footer">
+  本文件由系統原始碼自動整理產生，內容與 APP 實際呈現一致。<br>
+  來源檔案：SymptomReport.jsx、UsabilitySurvey.jsx、schema.sql
+</div>
+
+</body>
+</html>
