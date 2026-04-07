@@ -1,4 +1,4 @@
-name: Deploy
+name: Deploy Frontend
 
 on:
   push:
@@ -10,21 +10,12 @@ concurrency:
 
 jobs:
   # ─────────────────────────────────────
-  # Gate: CI must pass before deploy
-  # ─────────────────────────────────────
-  ci-gate:
-    name: CI Gate
-    uses: ./.github/workflows/ci.yml
-    secrets: inherit
-
-  # ─────────────────────────────────────
   # Deploy Frontend to Vercel
+  # Supabase deploy is handled in ci.yml (edge-functions job)
   # ─────────────────────────────────────
   deploy-vercel:
     name: Deploy Frontend (Vercel)
     runs-on: ubuntu-latest
-    needs: ci-gate
-    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
 
@@ -35,37 +26,3 @@ jobs:
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           vercel-args: --prod
-
-  # ─────────────────────────────────────
-  # Deploy Supabase Edge Functions
-  # ─────────────────────────────────────
-  deploy-supabase:
-    name: Deploy Supabase Functions
-    runs-on: ubuntu-latest
-    needs: ci-gate
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Link Supabase project
-        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Deploy Edge Functions
-        run: |
-          supabase functions deploy ai-chat --no-verify-jwt
-          supabase functions deploy patient-onboard --no-verify-jwt
-          supabase functions deploy check-adherence --no-verify-jwt
-          supabase functions deploy health --no-verify-jwt
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
-      - name: Run DB Migrations
-        run: supabase db push
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

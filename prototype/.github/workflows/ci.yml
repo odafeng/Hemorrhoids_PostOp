@@ -5,7 +5,6 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  workflow_call:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -75,7 +74,117 @@ jobs:
           retention-days: 7
 
   # ─────────────────────────────────────
-  # Job 3: E2E Tests (Demo Mode)
+  # Job 3: Edge Function Smoke Tests
+  # ─────────────────────────────────────
+  edge-functions:
+    name: Edge Function Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link Supabase project
+        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy Edge Functions
+        run: |
+          supabase functions deploy ai-chat --no-verify-jwt
+          supabase functions deploy patient-onboard --no-verify-jwt
+          supabase functions deploy check-adherence --no-verify-jwt
+          supabase functions deploy health --no-verify-jwt
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Run DB Migrations
+        run: supabase db push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Smoke test — health endpoint
+        run: |
+          HTTP_CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" \
+            --max-time 15 \
+            "${{ secrets.VITE_SUPABASE_URL }}/functions/v1/health")
+          cat /tmp/health.json
+          echo ""
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "FAIL: health returned HTTP $HTTP_CODE"
+            exit 1
+          fi
+          echo "OK: health endpoint returned 200"
+
+      - name: Smoke test — ai-chat rejects without auth
+        run: |
+          HTTP_CODE=$(curl -s -o /tmp/aichat.json -w "%{http_code}" \
+            --max-time 15 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "apikey: ${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
+            -d '{"question":"test"}' \
+            "${{ secrets.VITE_SUPABASE_URL }}/functions/v1/ai-chat")
+          cat /tmp/aichat.json
+          echo ""
+          if [ "$HTTP_CODE" != "401" ]; then
+            echo "FAIL: ai-chat should return 401 without auth, got $HTTP_CODE"
+            exit 1
+          fi
+          echo "OK: ai-chat correctly rejects unauthenticated requests"
+
+      - name: Smoke test — patient-onboard rejects without auth
+        run: |
+          HTTP_CODE=$(curl -s -o /tmp/onboard.json -w "%{http_code}" \
+            --max-time 15 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "apikey: ${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
+            -d '{}' \
+            "${{ secrets.VITE_SUPABASE_URL }}/functions/v1/patient-onboard")
+          cat /tmp/onboard.json
+          echo ""
+          if [ "$HTTP_CODE" != "401" ]; then
+            echo "FAIL: patient-onboard should return 401, got $HTTP_CODE"
+            exit 1
+          fi
+          echo "OK: patient-onboard correctly rejects unauthenticated requests"
+
+      - name: Smoke test — check-adherence rejects without cron secret
+        run: |
+          HTTP_CODE=$(curl -s -o /tmp/adherence.json -w "%{http_code}" \
+            --max-time 15 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            "${{ secrets.VITE_SUPABASE_URL }}/functions/v1/check-adherence")
+          cat /tmp/adherence.json
+          echo ""
+          if [ "$HTTP_CODE" != "401" ]; then
+            echo "FAIL: check-adherence should return 401, got $HTTP_CODE"
+            exit 1
+          fi
+          echo "OK: check-adherence correctly rejects unauthorized requests"
+
+      - name: Smoke test — ai-chat CORS headers
+        run: |
+          curl -s -D /tmp/cors_headers.txt -o /dev/null \
+            -X OPTIONS \
+            -H "Origin: https://prototype-zeta-black.vercel.app" \
+            -H "Access-Control-Request-Method: POST" \
+            "${{ secrets.VITE_SUPABASE_URL }}/functions/v1/ai-chat"
+          cat /tmp/cors_headers.txt
+          if grep -qi "access-control-allow-origin" /tmp/cors_headers.txt; then
+            echo "OK: CORS headers present"
+          else
+            echo "FAIL: No CORS headers in response"
+            exit 1
+          fi
+
+  # ─────────────────────────────────────
+  # Job 4: E2E Tests (Demo Mode)
   # ─────────────────────────────────────
   e2e-demo:
     name: E2E Tests (Demo Mode)
@@ -118,13 +227,12 @@ jobs:
           retention-days: 14
 
   # ─────────────────────────────────────
-  # Job 4: E2E Tests (Auth Mode — Supabase)
-  # Runs only when secrets are configured
+  # Job 5: E2E Tests (Auth Mode — Supabase)
   # ─────────────────────────────────────
   e2e-auth:
     name: E2E Tests (Auth Mode)
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, edge-functions]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
@@ -147,13 +255,13 @@ jobs:
           path: dist/
 
       - name: Run E2E tests (auth mode)
-        if: env.E2E_EMAIL != ''
         run: |
           CI=true npx playwright test e2e/auth-flow.spec.ts e2e/researcher-flow.spec.ts e2e/patient-registration.spec.ts
         env:
           CI: true
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
           E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
           E2E_RESEARCHER_EMAIL: ${{ secrets.E2E_RESEARCHER_EMAIL }}
