@@ -25,8 +25,8 @@ test.describe('Researcher Full Journey — Demo Mode', () => {
     await expect(page.getByText('病人列表')).toBeVisible();
     await expect(page.getByText('Study ID')).toBeVisible();
 
-    // CSV export button
-    await expect(page.getByRole('button', { name: /匯出症狀回報/ })).toBeVisible();
+    // Export section
+    await expect(page.getByText('資料匯出')).toBeVisible();
 
     // Logout button
     await expect(page.getByRole('button', { name: '登出' })).toBeVisible();
@@ -45,10 +45,28 @@ test.describe('Researcher Full Journey — Demo Mode', () => {
   // =====================
   test('CSV export button triggers download', async ({ page }) => {
     const downloadPromise = page.waitForEvent('download').catch(() => null);
-    await page.getByRole('button', { name: /匯出症狀回報/ }).click();
+    await page.getByRole('button', { name: /症狀回報 CSV/ }).click();
 
     // In demo mode, it may create a blob download or show an alert
     // Just verify it doesn't crash
+    await page.waitForTimeout(1000);
+  });
+
+  test('Export alerts CSV button works', async ({ page }) => {
+    const downloadPromise = page.waitForEvent('download').catch(() => null);
+    await page.getByRole('button', { name: /警示紀錄 CSV/ }).click();
+    await page.waitForTimeout(1000);
+  });
+
+  test('Export AI chat logs CSV button works', async ({ page }) => {
+    const downloadPromise = page.waitForEvent('download').catch(() => null);
+    await page.getByRole('button', { name: /AI 對話紀錄 CSV/ }).click();
+    await page.waitForTimeout(1000);
+  });
+
+  test('Full data backup JSON button works', async ({ page }) => {
+    const downloadPromise = page.waitForEvent('download').catch(() => null);
+    await page.getByRole('button', { name: /全量資料備份/ }).click();
     await page.waitForTimeout(1000);
   });
 

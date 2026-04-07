@@ -34,8 +34,8 @@ test.describe('Researcher — Dashboard & Tools', () => {
     await expect(page.getByText('病人列表')).toBeVisible();
     await expect(page.getByText('Study ID')).toBeVisible();
 
-    // CSV export button
-    await expect(page.getByRole('button', { name: /匯出症狀回報/ })).toBeVisible();
+    // Export buttons
+    await expect(page.getByRole('button', { name: /症狀回報 CSV/ })).toBeVisible();
 
     // Logout button
     await expect(page.getByRole('button', { name: '登出' })).toBeVisible();
