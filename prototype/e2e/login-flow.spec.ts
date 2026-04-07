@@ -44,7 +44,8 @@ test.describe('Login Page — UI Flow', () => {
     await page.locator('.toggle-btn').filter({ hasText: '註冊' }).click();
     await expect(page.getByText('建立帳號')).toBeVisible();
     await expect(page.getByPlaceholder('請輸入研究團隊提供的邀請碼')).toBeVisible();
-    await expect(page.getByPlaceholder('例如：HEM-001')).toBeVisible();
+    await expect(page.getByText('請選擇主刀醫師')).toBeVisible();
+    await expect(page.getByPlaceholder('001')).toBeVisible();
     await expect(page.locator('input[type="date"]')).toBeVisible();
 
     // Switch back to login
