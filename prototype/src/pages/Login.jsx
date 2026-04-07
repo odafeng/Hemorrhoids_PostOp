@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { signIn, signUp, resetPassword } from '../utils/supabaseService';
+import { signIn, signUp, resetPassword, checkStudyIdExists } from '../utils/supabaseService';
 
 const SAVED_EMAIL_KEY = 'saved_login_email';
 const REMEMBER_KEY = 'remember_login';
@@ -82,6 +82,11 @@ export default function Login({ onLogin }) {
           throw new Error('請輸入病人編號（1-4 位數字）。');
         }
         const studyId = `${surgeonPrefix}-${patientNumber.trim().padStart(3, '0')}`;
+        // Check for duplicate study_id
+        const exists = await checkStudyIdExists(studyId);
+        if (exists) {
+          throw new Error(`研究編號 ${studyId} 已存在，請使用其他編號。`);
+        }
         // Store invite token for patient-onboard Edge Function to verify
         sessionStorage.setItem('invite_token', inviteCode.trim());
         await signUp(email, password, {

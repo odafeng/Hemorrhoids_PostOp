@@ -73,6 +73,47 @@ export async function getPatient(studyId) {
 }
 
 /**
+ * Check if a study_id already exists in the patients table
+ * Used during registration to prevent duplicates
+ * Works with anon key — relies on RLS (researcher or patient own row)
+ */
+export async function checkStudyIdExists(studyId) {
+  if (!supabase) return false;
+  const { data, error } = await supabase
+    .from('patients')
+    .select('study_id')
+    .eq('study_id', studyId)
+    .maybeSingle();
+  if (error) return false; // RLS may block — assume not exists
+  return !!data;
+}
+
+/**
+ * Reset a patient's password (researcher/PI only — calls admin API via Edge Function)
+ */
+export async function adminResetPassword(targetEmail, newPassword) {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  if (!supabaseUrl || !supabase) throw new Error('Not configured');
+
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('Not authenticated');
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/admin-reset-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+    },
+    body: JSON.stringify({ email: targetEmail, newPassword }),
+  });
+
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.error || 'Password reset failed');
+  return result;
+}
+
+/**
  * Record patient consent — updates patients table with consent status + signature URL
  */
 export async function recordConsent(studyId, signatureDataUrl) {

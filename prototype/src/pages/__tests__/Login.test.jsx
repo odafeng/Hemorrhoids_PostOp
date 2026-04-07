@@ -7,11 +7,13 @@ import Login from '../Login';
 const mockSignIn = vi.fn();
 const mockSignUp = vi.fn();
 const mockResetPassword = vi.fn();
+const mockCheckStudyIdExists = vi.fn().mockResolvedValue(false);
 
 vi.mock('../../utils/supabaseService', () => ({
   signIn: (...args) => mockSignIn(...args),
   signUp: (...args) => mockSignUp(...args),
   resetPassword: (...args) => mockResetPassword(...args),
+  checkStudyIdExists: (...args) => mockCheckStudyIdExists(...args),
 }));
 
 describe('Login Page', () => {

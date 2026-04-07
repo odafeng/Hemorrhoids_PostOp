@@ -98,6 +98,7 @@ jobs:
           supabase functions deploy patient-onboard --no-verify-jwt
           supabase functions deploy check-adherence --no-verify-jwt
           supabase functions deploy health --no-verify-jwt
+          supabase functions deploy admin-reset-password --no-verify-jwt
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 

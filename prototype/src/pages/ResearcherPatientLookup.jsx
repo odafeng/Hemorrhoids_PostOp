@@ -7,6 +7,12 @@ export default function ResearcherPatientLookup({ onNavigate, isDemo, userInfo, 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Password reset state
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetMsg, setResetMsg] = useState('');
+
   const handleLookup = async (e) => {
     e.preventDefault();
     const studyId = query.trim();
@@ -180,6 +186,70 @@ export default function ResearcherPatientLookup({ onNavigate, isDemo, userInfo, 
             </div>
           )}
         </>
+      )}
+
+      {/* Password Reset Tool */}
+      {!isDemo && (
+        <div className="card" style={{ marginTop: 'var(--space-lg)' }}>
+          <div className="card-header">
+            <div className="card-icon warning">🔑</div>
+            <div className="card-title">重設病人密碼</div>
+          </div>
+          <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 'var(--space-md)' }}>
+            當病人忘記密碼時，研究人員可在此直接重設。
+          </p>
+          <div className="form-group">
+            <label className="form-label" style={{ fontSize: 'var(--font-xs)' }}>病人電子郵件</label>
+            <input
+              className="chat-input"
+              style={{ width: '100%' }}
+              type="email"
+              placeholder="patient@example.com"
+              value={resetEmail}
+              onChange={e => setResetEmail(e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label" style={{ fontSize: 'var(--font-xs)' }}>新密碼（至少 6 字元）</label>
+            <input
+              className="chat-input"
+              style={{ width: '100%' }}
+              type="text"
+              placeholder="輸入新密碼"
+              value={resetPassword}
+              onChange={e => setResetPassword(e.target.value)}
+              minLength={6}
+            />
+          </div>
+          <button
+            className="btn btn-primary"
+            style={{ width: '100%' }}
+            disabled={resetLoading || !resetEmail.trim() || resetPassword.length < 6}
+            onClick={async () => {
+              setResetLoading(true);
+              setResetMsg('');
+              try {
+                await sb.adminResetPassword(resetEmail.trim(), resetPassword);
+                setResetMsg('✓ 密碼重設成功');
+                setResetPassword('');
+              } catch (err) {
+                setResetMsg('✗ ' + (err.message || '重設失敗'));
+              } finally {
+                setResetLoading(false);
+              }
+            }}
+          >
+            {resetLoading ? '處理中...' : '重設密碼'}
+          </button>
+          {resetMsg && (
+            <div style={{
+              marginTop: 'var(--space-sm)', fontSize: 'var(--font-xs)', textAlign: 'center',
+              color: resetMsg.startsWith('✓') ? 'var(--success)' : 'var(--danger)',
+            }}>
+              {resetMsg}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
