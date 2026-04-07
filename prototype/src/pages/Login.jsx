@@ -1,5 +1,31 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { signIn, signUp, resetPassword } from '../utils/supabaseService';
+
+const SAVED_EMAIL_KEY = 'saved_login_email';
+const REMEMBER_KEY = 'remember_login';
+
+// Supabase error messages → 中文翻譯
+const ERROR_MAP = {
+  'Invalid login credentials': '帳號或密碼錯誤，請重新輸入',
+  'Email not confirmed': '電子郵件尚未驗證，請查看信箱',
+  'User already registered': '此電子郵件已註冊，請直接登入',
+  'Password should be at least 6 characters': '密碼至少需要 6 個字元',
+  'Unable to validate email address: invalid format': '電子郵件格式不正確',
+  'Signup requires a valid password': '請輸入有效的密碼',
+  'User not found': '查無此帳號，請確認電子郵件是否正確',
+  'Email rate limit exceeded': '請求過於頻繁，請稍後再試',
+  'For security purposes, you can only request this after': '操作過於頻繁，請稍後再試',
+};
+
+function translateError(msg) {
+  if (!msg) return '登入失敗，請檢查帳號密碼';
+  // If message is already Chinese (contains CJK characters), return as-is
+  if (/[\u4e00-\u9fff]/.test(msg)) return msg;
+  for (const [en, zh] of Object.entries(ERROR_MAP)) {
+    if (msg.includes(en)) return zh;
+  }
+  return '登入失敗，請檢查帳號密碼';
+}
 
 export default function Login({ onLogin }) {
   const [mode, setMode] = useState('login'); // 'login' | 'register' | 'forgot'
@@ -11,6 +37,15 @@ export default function Login({ onLogin }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => localStorage.getItem(REMEMBER_KEY) === 'true');
+
+  // Load saved email on mount
+  useEffect(() => {
+    if (rememberMe) {
+      const saved = localStorage.getItem(SAVED_EMAIL_KEY);
+      if (saved) setEmail(saved);
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -39,10 +74,18 @@ export default function Login({ onLogin }) {
         alert('帳號建立成功！請登入。');
       } else {
         await signIn(email, password);
+        // Save email if "remember me" is checked
+        if (rememberMe) {
+          localStorage.setItem(SAVED_EMAIL_KEY, email.trim());
+          localStorage.setItem(REMEMBER_KEY, 'true');
+        } else {
+          localStorage.removeItem(SAVED_EMAIL_KEY);
+          localStorage.removeItem(REMEMBER_KEY);
+        }
         // onLogin will be triggered via onAuthStateChange in App
       }
     } catch (err) {
-      setError(err.message || '登入失敗，請檢查帳號密碼');
+      setError(translateError(err.message));
     } finally {
       setLoading(false);
     }
@@ -163,6 +206,29 @@ export default function Login({ onLogin }) {
                     minLength={6}
                   />
                 </div>
+              )}
+
+              {mode === 'login' && (
+                <label style={{
+                  display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
+                  marginBottom: 'var(--space-md)', cursor: 'pointer',
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => {
+                      setRememberMe(e.target.checked);
+                      if (!e.target.checked) {
+                        localStorage.removeItem(SAVED_EMAIL_KEY);
+                        localStorage.removeItem(REMEMBER_KEY);
+                      }
+                    }}
+                    style={{ width: '16px', height: '16px', accentColor: 'var(--accent)' }}
+                  />
+                  <span style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)' }}>
+                    記住我的帳號
+                  </span>
+                </label>
               )}
 
               {error && (

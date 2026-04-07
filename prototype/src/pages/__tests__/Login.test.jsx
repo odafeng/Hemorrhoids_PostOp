@@ -103,8 +103,8 @@ describe('Login Page', () => {
     });
   });
 
-  it('shows error message on login failure', async () => {
-    mockSignIn.mockRejectedValue(new Error('Invalid credentials'));
+  it('shows error message in Chinese on login failure', async () => {
+    mockSignIn.mockRejectedValue(new Error('Invalid login credentials'));
     render(<Login onLogin={vi.fn()} />);
 
     fireEvent.change(screen.getByPlaceholderText('your@email.com'), { target: { value: 'test@test.com' } });
@@ -112,7 +112,7 @@ describe('Login Page', () => {
     fireEvent.submit(screen.getByText('登入', { selector: 'button[type="submit"]' }));
 
     await waitFor(() => {
-      expect(screen.getByText('Invalid credentials')).toBeInTheDocument();
+      expect(screen.getByText('帳號或密碼錯誤，請重新輸入')).toBeInTheDocument();
     });
   });
 
