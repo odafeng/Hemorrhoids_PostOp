@@ -119,6 +119,9 @@ Deno.serve(async (req: Request) => {
       // Global token matched — proceed without study_invites row
     }
 
+    // Parse surgeon prefix from study_id (e.g. "HSF-001" → "HSF")
+    const surgeonId = studyId.includes("-") ? studyId.split("-")[0].toUpperCase() : null;
+
     // Create new patient record
     const { data: patient, error: insertError } = await adminClient
       .from("patients")
@@ -126,6 +129,7 @@ Deno.serve(async (req: Request) => {
         study_id: studyId,
         surgery_date: surgeryDate || new Date().toISOString().split("T")[0],
         study_status: "active",
+        surgeon_id: surgeonId,
       })
       .select()
       .single();

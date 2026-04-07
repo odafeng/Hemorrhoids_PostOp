@@ -71,6 +71,7 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
     }
   };
 
+  const [surgeonFilter, setSurgeonFilter] = useState('all');
   const [exporting, setExporting] = useState(false);
   const [exportType, setExportType] = useState(null);
   const today = new Date().toLocaleDateString('en-CA');
@@ -153,11 +154,23 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
     }
   };
 
-  // Merge patients with adherence
-  const patientRows = patients.map(p => {
-    const adh = adherence.find(a => a.study_id === p.study_id) || {};
-    return { ...p, ...adh };
-  });
+  // Surgeon prefix mapping
+  const SURGEON_NAMES = {
+    HSF: '黃士峯',
+    // Add more surgeons here as needed
+  };
+
+  // Extract unique surgeon IDs from patients
+  const getSurgeonId = (p) => p.surgeon_id || (p.study_id?.includes('-') ? p.study_id.split('-')[0].toUpperCase() : null);
+  const surgeonIds = [...new Set(patients.map(getSurgeonId).filter(Boolean))].sort();
+
+  // Merge patients with adherence + filter by surgeon
+  const patientRows = patients
+    .map(p => {
+      const adh = adherence.find(a => a.study_id === p.study_id) || {};
+      return { ...p, ...adh, _surgeonId: getSurgeonId(p) };
+    })
+    .filter(p => surgeonFilter === 'all' || p._surgeonId === surgeonFilter);
 
   if (loading) {
     return (
@@ -268,9 +281,28 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
 
       {/* Patient Table */}
       <div className="card delay-5" style={{ padding: 'var(--space-md)' }}>
-        <div className="card-header">
+        <div className="card-header" style={{ marginBottom: 'var(--space-sm)' }}>
           <div className="card-icon cyan">📋</div>
-          <div className="card-title">病人列表</div>
+          <div style={{ flex: 1 }}>
+            <div className="card-title">病人列表</div>
+          </div>
+          {surgeonIds.length > 1 && (
+            <select
+              value={surgeonFilter}
+              onChange={(e) => setSurgeonFilter(e.target.value)}
+              style={{
+                background: 'var(--bg-input)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)',
+                fontSize: 'var(--font-xs)', padding: '4px 8px',
+                fontFamily: 'var(--font-family)',
+              }}
+            >
+              <option value="all">全部醫師</option>
+              {surgeonIds.map(id => (
+                <option key={id} value={id}>{SURGEON_NAMES[id] || id}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div className="r-table-wrap">
@@ -278,6 +310,7 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
             <thead>
               <tr>
                 <th>Study ID</th>
+                <th>主刀</th>
                 <th>術式</th>
                 <th>POD</th>
                 <th>回報</th>
@@ -295,6 +328,7 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
                 return (
                   <tr key={row.study_id}>
                     <td style={{ fontWeight: 600, color: 'var(--accent)' }}>{row.study_id}</td>
+                    <td style={{ fontSize: '0.65rem' }}>{SURGEON_NAMES[row._surgeonId] || row._surgeonId || '—'}</td>
                     <td>{row.surgery_type === 'stapled hemorrhoidopexy' ? 'Stapled' : 'Open'}</td>
                     <td>{podLabel}</td>
                     <td>{row.total_reports ?? 0}</td>
