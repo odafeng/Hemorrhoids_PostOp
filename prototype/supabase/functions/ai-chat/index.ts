@@ -5,23 +5,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { SYSTEM_PROMPT } from "./_prompt.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-
-// CORS — restrict to production domain + local dev
-const ALLOWED_ORIGINS = [
-  "https://prototype-zeta-black.vercel.app",
-  "http://localhost:5173",
-  "http://localhost:4173",
-];
-
-function getCorsHeaders(req: Request) {
-  const origin = req.headers.get("origin") || "";
-  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
-  return {
-    "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  };
-}
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 // Simple in-memory rate limiting (per edge instance)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();

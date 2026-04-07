@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { saveReport as saveLocalReport, getTodayReport, getPOD } from '../utils/storage';
 import * as sb from '../utils/supabaseService';
+import { enqueueReport } from '../utils/offlineQueue';
 
 const bleedingOptions = [
   { value: '無', label: '無', desc: '無任何出血' },
@@ -133,6 +134,25 @@ export default function SymptomReport({ onComplete, isDemo, userInfo }) {
       }, 1800);
     } catch (err) {
       console.error('Submit error:', err);
+      if (!isDemo && userInfo?.studyId && !navigator.onLine) {
+        // Offline: queue for later submission
+        let pod = 0;
+        if (userInfo?.surgeryDate) {
+          const s = new Date(userInfo.surgeryDate);
+          const t = new Date();
+          s.setHours(0, 0, 0, 0);
+          t.setHours(0, 0, 0, 0);
+          pod = Math.max(0, Math.floor((t - s) / (1000 * 60 * 60 * 24)));
+        }
+        const woundValue = wound.map(w => w === '其他' ? `其他:${woundOther.trim()}` : w).join(',');
+        enqueueReport(userInfo.studyId, pod, { pain, bleeding, bowel, fever, continence, urinary, wound: woundValue });
+        setShowSuccess(true);
+        setTimeout(() => {
+          setShowSuccess(false);
+          onComplete();
+        }, 1800);
+        return;
+      }
       setError('提交失敗：' + (err.message || '請稍後再試'));
     } finally {
       setSubmitting(false);

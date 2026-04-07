@@ -13,12 +13,14 @@ import OfflineBanner from './components/OfflineBanner';
 import IOSInstallPrompt from './components/IOSInstallPrompt';
 import UpdateBanner from './components/UpdateBanner';
 import PageErrorBoundary from './components/PageErrorBoundary';
+import ConsentPage from './pages/ConsentPage';
 import { installGlobalErrorHandlers, initSentry } from './utils/errorLogger';
 import { useAuth } from './utils/useAuth';
 import { getTodayReport as getLocalTodayReport } from './utils/storage';
 import { startReminderScheduler, stopReminderScheduler } from './utils/notifications';
 import { signOut } from './utils/supabaseService';
 import * as sb from './utils/supabaseService';
+import { flushQueue } from './utils/offlineQueue';
 
 initSentry();
 installGlobalErrorHandlers();
@@ -47,6 +49,27 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [consentSigned, setConsentSigned] = useState(true); // default true to avoid flash
+
+  // Check consent status for patients
+  useEffect(() => {
+    if (authState !== 'loggedIn' || isDemo || !userInfo?.studyId) {
+      setConsentChecked(true);
+      return;
+    }
+    const isPatient = userInfo?.role === 'patient';
+    if (!isPatient) {
+      setConsentChecked(true);
+      return;
+    }
+    sb.getPatient(userInfo.studyId).then(patient => {
+      setConsentSigned(patient?.consent_signed ?? false);
+      setConsentChecked(true);
+    }).catch(() => {
+      setConsentChecked(true);
+    });
+  }, [authState, isDemo, userInfo]);
 
   // Theme
   useEffect(() => {
@@ -80,6 +103,21 @@ export default function App() {
       navigator.serviceWorker?.removeEventListener('message', handleSWMessage);
     };
   }, [authState, isDemo, userInfo, navigate]);
+
+  // Flush offline queue when coming back online
+  useEffect(() => {
+    if (authState !== 'loggedIn' || isDemo) return;
+    const handleOnline = async () => {
+      const { flushed } = await flushQueue(sb.saveReport);
+      if (flushed > 0) {
+        console.info(`[OfflineQueue] Flushed ${flushed} queued reports`);
+        setRefreshKey(k => k + 1); // refresh dashboard
+      }
+    };
+    window.addEventListener('online', handleOnline);
+    handleOnline(); // also flush on mount
+    return () => window.removeEventListener('online', handleOnline);
+  }, [authState, isDemo]);
 
   const isResearcherRole = userInfo?.role === 'researcher' || userInfo?.role === 'pi';
   const tabs = isResearcherRole ? researcherTabs : patientTabs;
@@ -121,6 +159,20 @@ export default function App() {
 
   if (authState === 'loggedOut') {
     return <Login onLogin={(info) => handleLogin(info, navigate)} />;
+  }
+
+  // Consent gate — patients must sign before using the app
+  if (consentChecked && !consentSigned && !isDemo && userInfo?.role === 'patient') {
+    return (
+      <ConsentPage
+        userInfo={userInfo}
+        onConsent={async (signatureDataUrl) => {
+          await sb.recordConsent(userInfo.studyId, signatureDataUrl);
+          setConsentSigned(true);
+        }}
+        onDecline={() => handleLogout(navigate)}
+      />
+    );
   }
 
   return (

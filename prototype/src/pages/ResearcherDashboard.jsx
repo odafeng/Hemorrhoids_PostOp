@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getResearcherMockData } from '../utils/storage';
 import * as sb from '../utils/supabaseService';
 import ResearcherCharts from '../components/ResearcherCharts';
+import { downloadCSV, downloadJSON } from '../utils/csvExport';
 
 export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLogout }) {
   const [loading, setLoading] = useState(true);
@@ -71,38 +72,84 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
   };
 
   const [exporting, setExporting] = useState(false);
+  const [exportType, setExportType] = useState(null);
+  const today = new Date().toLocaleDateString('en-CA');
 
   const handleExportCSV = async () => {
     setExporting(true);
+    setExportType('reports');
     try {
-      const reports = isDemo ? [] : await sb.getAllReportsForResearcher();
-      if (reports.length === 0) {
-        alert('尚無回報資料可匯出');
-        return;
-      }
-      const headers = ['study_id', 'report_date', 'pod', 'pain_nrs', 'bleeding', 'bowel', 'fever', 'wound', 'urinary', 'continence', 'report_source', 'reported_at'];
-      const csv = [
-        headers.join(','),
-        ...reports.map(r => headers.map(h => {
-          const val = r[h];
-          if (val === null || val === undefined) return '';
-          const str = String(val);
-          return str.includes(',') || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str;
-        }).join(','))
-      ].join('\n');
-
-      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `symptom_reports_${new Date().toLocaleDateString('en-CA')}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const reports = isDemo ? allReports : await sb.getAllReportsForResearcher();
+      downloadCSV(reports,
+        ['study_id', 'report_date', 'pod', 'pain_nrs', 'bleeding', 'bowel', 'fever', 'wound', 'urinary', 'continence', 'report_source', 'reported_at'],
+        `symptom_reports_${today}.csv`);
     } catch (err) {
       console.error('Export error:', err);
       alert('匯出失敗：' + err.message);
     } finally {
       setExporting(false);
+      setExportType(null);
+    }
+  };
+
+  const handleExportAlerts = async () => {
+    setExporting(true);
+    setExportType('alerts');
+    try {
+      const data = isDemo ? alerts : await sb.getAllAlertsForResearcher();
+      downloadCSV(data,
+        ['id', 'study_id', 'alert_type', 'alert_level', 'message', 'triggered_at', 'acknowledged', 'acknowledged_by', 'acknowledged_at'],
+        `alerts_${today}.csv`);
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('匯出失敗：' + err.message);
+    } finally {
+      setExporting(false);
+      setExportType(null);
+    }
+  };
+
+  const handleExportChats = async () => {
+    setExporting(true);
+    setExportType('chats');
+    try {
+      const data = isDemo ? [] : await sb.getAllChatsForResearcher();
+      downloadCSV(data,
+        ['id', 'study_id', 'user_message', 'ai_response', 'matched_topic', 'reviewed', 'review_result', 'review_notes', 'created_at'],
+        `ai_chat_logs_${today}.csv`);
+    } catch (err) {
+      console.error('Export error:', err);
+      alert('匯出失敗：' + err.message);
+    } finally {
+      setExporting(false);
+      setExportType(null);
+    }
+  };
+
+  const handleFullBackup = async () => {
+    setExporting(true);
+    setExportType('backup');
+    try {
+      let data;
+      if (isDemo) {
+        const mock = getResearcherMockData();
+        data = { patients: mock.patients, symptom_reports: mock.reports, alerts: mock.alerts, ai_chat_logs: mock.chatLogs };
+      } else {
+        const [reports, alertData, chats, pts] = await Promise.all([
+          sb.getAllReportsForResearcher(),
+          sb.getAllAlertsForResearcher(),
+          sb.getAllChatsForResearcher(),
+          sb.getAllPatients(),
+        ]);
+        data = { patients: pts, symptom_reports: reports, alerts: alertData, ai_chat_logs: chats };
+      }
+      downloadJSON(data, `full_backup_${today}.json`);
+    } catch (err) {
+      console.error('Backup error:', err);
+      alert('備份失敗：' + err.message);
+    } finally {
+      setExporting(false);
+      setExportType(null);
     }
   };
 
@@ -185,15 +232,31 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
           : '🔍 AI 回覆審核紀錄'}
       </button>
 
-      {/* Export Button */}
-      <button
-        className="btn btn-secondary delay-5"
-        onClick={handleExportCSV}
-        disabled={exporting}
-        style={{ marginBottom: 'var(--space-lg)', width: '100%' }}
-      >
-        {exporting ? '匯出中...' : '📥 匯出症狀回報 CSV'}
-      </button>
+      {/* Export Buttons */}
+      <div className="card delay-5" style={{ padding: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
+        <div className="card-header">
+          <div className="card-icon success">📥</div>
+          <div className="card-title">資料匯出</div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+          <button className="btn btn-secondary" onClick={handleExportCSV}
+            disabled={exporting} style={{ width: '100%' }}>
+            {exportType === 'reports' ? '匯出中...' : '📋 症狀回報 CSV'}
+          </button>
+          <button className="btn btn-secondary" onClick={handleExportAlerts}
+            disabled={exporting} style={{ width: '100%' }}>
+            {exportType === 'alerts' ? '匯出中...' : '🚨 警示紀錄 CSV'}
+          </button>
+          <button className="btn btn-secondary" onClick={handleExportChats}
+            disabled={exporting} style={{ width: '100%' }}>
+            {exportType === 'chats' ? '匯出中...' : '💬 AI 對話紀錄 CSV'}
+          </button>
+          <button className="btn btn-primary" onClick={handleFullBackup}
+            disabled={exporting} style={{ width: '100%' }}>
+            {exportType === 'backup' ? '備份中...' : '💾 全量資料備份 (JSON)'}
+          </button>
+        </div>
+      </div>
 
       {/* Charts */}
       {allReports.length > 0 && (

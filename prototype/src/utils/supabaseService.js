@@ -73,6 +73,37 @@ export async function getPatient(studyId) {
 }
 
 /**
+ * Record patient consent — updates patients table with consent status + signature URL
+ */
+export async function recordConsent(studyId, signatureDataUrl) {
+  // Upload signature image to Supabase Storage
+  let signatureUrl = null;
+  if (signatureDataUrl) {
+    const blob = await (await fetch(signatureDataUrl)).blob();
+    const fileName = `consent/${studyId}_${Date.now()}.png`;
+    const { error: uploadError } = await supabase.storage
+      .from('signatures')
+      .upload(fileName, blob, { contentType: 'image/png', upsert: true });
+    if (!uploadError) {
+      const { data: urlData } = supabase.storage.from('signatures').getPublicUrl(fileName);
+      signatureUrl = urlData?.publicUrl || null;
+    }
+  }
+
+  const { error } = await supabase
+    .from('patients')
+    .update({
+      consent_signed: true,
+      consent_date: new Date().toISOString(),
+      consent_signature_url: signatureUrl,
+    })
+    .eq('study_id', studyId);
+
+  if (error) throw error;
+  return { signatureUrl };
+}
+
+/**
  * Ensure patient record exists via server-side Edge Function.
  * The Edge Function uses service_role to bypass RLS safely.
  * @param {string} studyId

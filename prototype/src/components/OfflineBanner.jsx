@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { getQueueCount } from '../utils/offlineQueue';
 
 export default function OfflineBanner() {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [queueCount, setQueueCount] = useState(0);
 
   useEffect(() => {
     const goOffline = () => setIsOffline(true);
@@ -14,6 +16,12 @@ export default function OfflineBanner() {
     };
   }, []);
 
+  useEffect(() => {
+    setQueueCount(getQueueCount());
+    const interval = setInterval(() => setQueueCount(getQueueCount()), 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   if (!isOffline) return null;
 
   return (
@@ -23,7 +31,9 @@ export default function OfflineBanner() {
       textAlign: 'center', padding: '6px 16px',
       fontSize: 'var(--font-xs)', fontWeight: 600,
     }}>
-      📡 目前離線中 — 部分功能可能無法使用
+      {queueCount > 0
+        ? `📡 離線中 — ${queueCount} 筆回報已暫存，上線後自動提交`
+        : '📡 目前離線中 — 部分功能可能無法使用'}
     </div>
   );
 }
