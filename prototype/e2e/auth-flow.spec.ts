@@ -1,9 +1,37 @@
-// E2E: Auth mode — real Supabase login, tests report submit + AI chat
-// Requires GitHub Secrets: E2E_EMAIL (patient account), E2E_PASSWORD, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+// E2E: Auth mode — real Supabase login, tests report submit + AI chat + DB verification
+// Requires GitHub Secrets: E2E_EMAIL, E2E_PASSWORD, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
 import { test, expect } from '@playwright/test';
 
 const email = process.env.E2E_EMAIL || '';
 const password = process.env.E2E_PASSWORD || '';
+const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+// Helper: query Supabase DB directly via REST API (service_role)
+async function querySupabase(table: string, params: string) {
+  if (!serviceKey) return null;
+  const res = await fetch(`${supabaseUrl}/rest/v1/${table}?${params}`, {
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+    },
+  });
+  return res.json();
+}
+
+// Helper: delete rows from Supabase
+async function deleteSupabase(table: string, params: string) {
+  if (!serviceKey) return;
+  await fetch(`${supabaseUrl}/rest/v1/${table}?${params}`, {
+    method: 'DELETE',
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+    },
+  });
+}
+
+const E2E_STUDY_ID = 'TEST-002';
 
 test.describe('Auth Mode — Report & AI Chat', () => {
   test.skip(!email || !password, 'E2E_EMAIL / E2E_PASSWORD not set');
@@ -36,7 +64,7 @@ test.describe('Auth Mode — Report & AI Chat', () => {
     await expect(dashboard).toBeVisible({ timeout: 20000 });
   });
 
-  test('Submit symptom report (full form)', async ({ page }) => {
+  test('Submit symptom report (full form) + verify DB', async ({ page }) => {
     // Navigate to report
     await page.locator('nav.bottom-nav').getByText('回報').click();
     await expect(page.getByText('疼痛分數')).toBeVisible({ timeout: 10000 });
@@ -82,6 +110,36 @@ test.describe('Auth Mode — Report & AI Chat', () => {
 
     // Dashboard should show today's report as completed
     await expect(page.getByText('✓ 已完成')).toBeVisible();
+
+    // ========================================
+    // DB Verification: query Supabase directly
+    // ========================================
+    if (serviceKey && supabaseUrl) {
+      const today = new Date().toLocaleDateString('en-CA');
+      const reports = await querySupabase(
+        'symptom_reports',
+        `study_id=eq.${E2E_STUDY_ID}&report_date=eq.${today}&select=*`
+      );
+
+      expect(reports).toBeTruthy();
+      expect(reports.length).toBeGreaterThanOrEqual(1);
+
+      const report = reports[reports.length - 1]; // latest
+      expect(report.pain_nrs).toBe(4);
+      expect(report.bleeding).toBe('少量');
+      expect(report.bowel).toBe('正常');
+      expect(report.fever).toBe(false);
+      expect(report.urinary).toBe('正常');
+      expect(report.continence).toBe('正常');
+      expect(report.wound).toContain('無異常');
+
+      console.log('[DB Verify] ✓ symptom_reports row confirmed:', {
+        study_id: report.study_id,
+        report_date: report.report_date,
+        pain_nrs: report.pain_nrs,
+        bleeding: report.bleeding,
+      });
+    }
   });
 
   test('History shows submitted report data', async ({ page }) => {
@@ -110,13 +168,14 @@ test.describe('Auth Mode — Report & AI Chat', () => {
     await expect(latestItem.getByText('傷口')).toBeVisible();
   });
 
-  test('AI Chat — ask question and get Claude response', async ({ page }) => {
+  test('AI Chat — ask question and get Claude response + verify DB', async ({ page }) => {
     // Navigate to chat
     await page.locator('nav.bottom-nav').getByText('AI 衛教').click();
     await expect(page.locator('.chat-bubble.ai').first()).toBeVisible({ timeout: 10000 });
 
     // Use quick question
     const quickBtn = page.locator('button.quick-q').first();
+    const questionText = await quickBtn.innerText();
     await quickBtn.click();
 
     // Wait for AI response (real Claude API via Edge Function)
@@ -129,10 +188,50 @@ test.describe('Auth Mode — Report & AI Chat', () => {
 
     // Verify disclaimer footer exists
     await expect(secondBubble.getByText('僅供衛教參考')).toBeVisible();
+
+    // ========================================
+    // DB Verification: check ai_chat_logs
+    // ========================================
+    if (serviceKey && supabaseUrl) {
+      const chatLogs = await querySupabase(
+        'ai_chat_logs',
+        `study_id=eq.${E2E_STUDY_ID}&order=created_at.desc&limit=1&select=*`
+      );
+
+      expect(chatLogs).toBeTruthy();
+      expect(chatLogs.length).toBe(1);
+
+      const log = chatLogs[0];
+      expect(log.user_message).toBeTruthy();
+      expect(log.ai_response).toBeTruthy();
+      expect(log.ai_response.length).toBeGreaterThan(10); // real response, not error
+
+      console.log('[DB Verify] ✓ ai_chat_logs row confirmed:', {
+        study_id: log.study_id,
+        user_message: log.user_message.slice(0, 30),
+        ai_response_length: log.ai_response.length,
+      });
+    }
   });
 
   test('Logout works', async ({ page }) => {
     await page.getByRole('button', { name: '登出' }).click();
     await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10000 });
+  });
+
+  // ========================================
+  // Cleanup: remove all E2E test data from DB
+  // Runs last — deletes symptom_reports, ai_chat_logs, alerts for TEST-002
+  // ========================================
+  test.afterAll(async () => {
+    if (!serviceKey || !supabaseUrl) return;
+
+    console.log('[Cleanup] Removing E2E test data for', E2E_STUDY_ID);
+
+    await deleteSupabase('ai_chat_logs', `study_id=eq.${E2E_STUDY_ID}`);
+    await deleteSupabase('alerts', `study_id=eq.${E2E_STUDY_ID}`);
+    await deleteSupabase('symptom_reports', `study_id=eq.${E2E_STUDY_ID}`);
+
+    console.log('[Cleanup] ✓ Done — ai_chat_logs, alerts, symptom_reports cleared');
   });
 });
