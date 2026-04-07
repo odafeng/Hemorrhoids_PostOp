@@ -11,6 +11,9 @@ import {
   saveChatMessage,
   clearAllData,
   seedDemoData,
+  getSurveyLocal,
+  saveSurveyLocal,
+  getResearcherMockData,
 } from '../storage';
 
 // Freeze "today" for deterministic tests
@@ -139,6 +142,62 @@ describe('storage utils', () => {
       clearAllData();
       expect(getAllReports()).toEqual([]);
       expect(getChatHistory()).toEqual([]);
+    });
+  });
+
+  // === Survey ===
+  describe('survey', () => {
+    it('getSurveyLocal returns null initially', () => {
+      expect(getSurveyLocal()).toBeNull();
+    });
+
+    it('saveSurveyLocal stores and retrieves survey', () => {
+      const survey = { q1: 5, q2: 4, comments: 'Good' };
+      const saved = saveSurveyLocal(survey);
+      expect(saved.q1).toBe(5);
+      expect(saved.date).toBe(FIXED_TODAY);
+      expect(saved.timestamp).toBeDefined();
+      expect(getSurveyLocal()).not.toBeNull();
+      expect(getSurveyLocal().q1).toBe(5);
+    });
+  });
+
+  // === Researcher Mock Data ===
+  describe('getResearcherMockData', () => {
+    it('returns all mock data structures', () => {
+      const data = getResearcherMockData();
+      expect(data.patients.length).toBe(4);
+      expect(data.adherence.length).toBe(4);
+      expect(data.alerts.length).toBe(3);
+      expect(data.chatLogs.length).toBe(5);
+      expect(data.reports.length).toBeGreaterThan(0);
+    });
+
+    it('patients have required fields', () => {
+      const { patients } = getResearcherMockData();
+      for (const p of patients) {
+        expect(p.study_id).toBeTruthy();
+        expect(p.surgery_date).toBeTruthy();
+        expect(p.study_status).toBe('active');
+      }
+    });
+
+    it('reports have all expected fields', () => {
+      const { reports } = getResearcherMockData();
+      for (const r of reports) {
+        expect(r.study_id).toBeTruthy();
+        expect(typeof r.pod).toBe('number');
+        expect(typeof r.pain_nrs).toBe('number');
+      }
+    });
+
+    it('adherence data has correct structure', () => {
+      const { adherence } = getResearcherMockData();
+      for (const a of adherence) {
+        expect(a.study_id).toBeTruthy();
+        expect(typeof a.total_reports).toBe('number');
+        expect(typeof a.adherence_pct).toBe('number');
+      }
     });
   });
 

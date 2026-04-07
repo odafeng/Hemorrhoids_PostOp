@@ -129,6 +129,96 @@ describe('checkAlerts', () => {
     });
   });
 
+  // === Ascending Pain ===
+  describe('ascending pain alerts', () => {
+    it('triggers ascending pain for 3 consecutive increasing days', () => {
+      const dates = makeConsecutiveDates(3);
+      const reports = [
+        makeReport({ date: dates[0], pain: 7 }),
+        makeReport({ date: dates[1], pain: 5 }),
+        makeReport({ date: dates[2], pain: 3 }),
+      ];
+      const alerts = checkAlerts(reports);
+      expect(alerts.some(a => a.id === 'ascending_pain')).toBe(true);
+    });
+
+    it('does NOT trigger ascending pain for flat pain', () => {
+      const dates = makeConsecutiveDates(3);
+      const reports = dates.map(date => makeReport({ date, pain: 5 }));
+      expect(checkAlerts(reports).some(a => a.id === 'ascending_pain')).toBe(false);
+    });
+
+    it('does NOT trigger ascending pain with less than 3 reports', () => {
+      const dates = makeConsecutiveDates(2);
+      const reports = dates.map((date, i) => makeReport({ date, pain: 5 + i }));
+      expect(checkAlerts(reports).some(a => a.id === 'ascending_pain')).toBe(false);
+    });
+  });
+
+  // === Urinary Alerts ===
+  describe('urinary alerts', () => {
+    it('triggers urinary_retention when latest is 尿不出來', () => {
+      const reports = [makeReport({ date: '2026-03-18', urinary: '尿不出來' })];
+      const alerts = checkAlerts(reports);
+      expect(alerts.some(a => a.id === 'urinary_retention')).toBe(true);
+      expect(alerts.find(a => a.id === 'urinary_retention').type).toBe('danger');
+    });
+
+    it('triggers urinary_difficulty for 2+ consecutive days of 困難', () => {
+      const dates = makeConsecutiveDates(2);
+      const reports = dates.map(date => makeReport({ date, urinary: '困難' }));
+      const alerts = checkAlerts(reports);
+      expect(alerts.some(a => a.id === 'urinary_difficulty')).toBe(true);
+    });
+
+    it('does NOT trigger urinary_difficulty for single day', () => {
+      const reports = [makeReport({ date: '2026-03-18', urinary: '困難' })];
+      expect(checkAlerts(reports).some(a => a.id === 'urinary_difficulty')).toBe(false);
+    });
+
+    it('counts 尿不出來 toward urinary_difficulty streak', () => {
+      const dates = makeConsecutiveDates(2);
+      const reports = [
+        makeReport({ date: dates[0], urinary: '困難' }),
+        makeReport({ date: dates[1], urinary: '尿不出來' }),
+      ];
+      const alerts = checkAlerts(reports);
+      expect(alerts.some(a => a.id === 'urinary_difficulty')).toBe(true);
+    });
+  });
+
+  // === Continence Alerts ===
+  describe('continence alerts', () => {
+    it('triggers incontinence when latest is 失禁', () => {
+      const reports = [makeReport({ date: '2026-03-18', continence: '失禁' })];
+      const alerts = checkAlerts(reports);
+      expect(alerts.some(a => a.id === 'incontinence')).toBe(true);
+      expect(alerts.find(a => a.id === 'incontinence').type).toBe('danger');
+    });
+
+    it('triggers soiling for 2+ consecutive days of 滲便', () => {
+      const dates = makeConsecutiveDates(2);
+      const reports = dates.map(date => makeReport({ date, continence: '滲便' }));
+      const alerts = checkAlerts(reports);
+      expect(alerts.some(a => a.id === 'soiling')).toBe(true);
+    });
+
+    it('does NOT trigger soiling for single day of 滲便', () => {
+      const reports = [makeReport({ date: '2026-03-18', continence: '滲便' })];
+      expect(checkAlerts(reports).some(a => a.id === 'soiling')).toBe(false);
+    });
+
+    it('counts 失禁 toward soiling streak', () => {
+      const dates = makeConsecutiveDates(2);
+      const reports = [
+        makeReport({ date: dates[0], continence: '滲便' }),
+        makeReport({ date: dates[1], continence: '失禁' }),
+      ];
+      const alerts = checkAlerts(reports);
+      expect(alerts.some(a => a.id === 'soiling')).toBe(true);
+    });
+  });
+
   // === Multiple Alerts ===
   it('can trigger multiple alerts simultaneously', () => {
     const dates = makeConsecutiveDates(3);

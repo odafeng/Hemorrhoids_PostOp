@@ -1,0 +1,171 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────
+  # Job 1: Lint + Unit Tests + Coverage
+  # ─────────────────────────────────────
+  test:
+    name: Lint & Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests with coverage
+        run: npx vitest run --coverage --reporter=default --reporter=json --outputFile=test-results.json
+
+      - name: Check coverage threshold (90%)
+        run: |
+          npx vitest run --coverage --coverage.thresholds.statements=90 --coverage.thresholds.lines=90 --coverage.thresholds.functions=85
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
+
+  # ─────────────────────────────────────
+  # Job 2: Build
+  # ─────────────────────────────────────
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  # ─────────────────────────────────────
+  # Job 3: E2E Tests (Demo Mode)
+  # ─────────────────────────────────────
+  e2e-demo:
+    name: E2E Tests (Demo Mode)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Run E2E tests (demo mode)
+        run: |
+          CI=true npx playwright test e2e/login-flow.spec.ts e2e/patient-full-journey.spec.ts e2e/researcher-full-journey.spec.ts e2e/demo-flow.spec.ts
+        env:
+          CI: true
+
+      - name: Upload E2E test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-demo-results
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 14
+
+  # ─────────────────────────────────────
+  # Job 4: E2E Tests (Auth Mode — Supabase)
+  # Runs only when secrets are configured
+  # ─────────────────────────────────────
+  e2e-auth:
+    name: E2E Tests (Auth Mode)
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Run E2E tests (auth mode)
+        if: env.E2E_EMAIL != ''
+        run: |
+          CI=true npx playwright test e2e/auth-flow.spec.ts e2e/researcher-flow.spec.ts e2e/patient-registration.spec.ts
+        env:
+          CI: true
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+          E2E_RESEARCHER_EMAIL: ${{ secrets.E2E_RESEARCHER_EMAIL }}
+          E2E_RESEARCHER_PASSWORD: ${{ secrets.E2E_RESEARCHER_PASSWORD }}
+          E2E_INVITE_CODE: ${{ secrets.E2E_INVITE_CODE }}
+
+      - name: Upload E2E auth results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-auth-results
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 14
