@@ -615,7 +615,7 @@ body {
 .chat-input-area {
   padding: var(--space-md);
   border-top: 1px solid var(--border);
-  background: rgba(10, 14, 26, 0.95);
+  background: var(--bg-nav, rgba(10, 14, 26, 0.95));
   backdrop-filter: blur(12px);
 }
 
