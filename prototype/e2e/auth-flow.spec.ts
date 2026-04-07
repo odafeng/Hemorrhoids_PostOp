@@ -109,7 +109,7 @@ test.describe('Auth Mode — Report & AI Chat', () => {
     await expect(page.getByText('術後天數')).toBeVisible({ timeout: 10000 });
 
     // Dashboard should show today's report as completed
-    await expect(page.getByText('✓ 已完成')).toBeVisible();
+    await expect(page.getByText('✓ 已完成').first()).toBeVisible();
 
     // ========================================
     // DB Verification: query Supabase directly
