@@ -134,7 +134,7 @@ export default function App() {
     return (
       <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh' }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '2rem', marginBottom: 'var(--space-md)', animation: 'pulse 1s infinite' }}>🏥</div>
+          <img src="/KSVGH.png" alt="" style={{ width: '60px', height: '60px', objectFit: 'contain', marginBottom: 'var(--space-md)', animation: 'pulse 1s infinite', borderRadius: '50%' }} />
           <p style={{ color: 'var(--text-secondary)' }}>載入中...</p>
           {loadingTooLong && (
             <div style={{ marginTop: 'var(--space-lg)' }}>

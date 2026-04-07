@@ -97,9 +97,16 @@ export default function Login({ onLogin }) {
 
   return (
     <div className="page" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '100dvh', padding: 'var(--space-xl)' }}>
-      {/* Logo / Header */}
+      {/* Hospital Branding */}
       <div style={{ textAlign: 'center', marginBottom: 'var(--space-2xl)' }}>
-        <div style={{ fontSize: '3rem', marginBottom: 'var(--space-md)' }}>🏥</div>
+        <img
+          src="/KSVGH.png"
+          alt="高雄榮民總醫院"
+          style={{ width: '80px', height: '80px', objectFit: 'contain', marginBottom: 'var(--space-md)', borderRadius: '50%' }}
+        />
+        <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', letterSpacing: '2px', marginBottom: '4px' }}>
+          高雄榮民總醫院 大腸直腸外科
+        </div>
         <h1 className="page-title" style={{ fontSize: 'var(--font-xl)', marginBottom: 'var(--space-xs)' }}>
           術後追蹤系統
         </h1>

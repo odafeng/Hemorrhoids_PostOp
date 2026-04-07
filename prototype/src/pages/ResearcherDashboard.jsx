@@ -171,12 +171,15 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
     <div className="page">
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <h1 className="page-title">研究者儀表板</h1>
-          <p className="page-subtitle">
-            {userInfo?.role === 'pi' ? '主持人' : '研究團隊'}
-            {isDemo && <span style={{ color: 'var(--warning)', marginLeft: '8px' }}>（Demo）</span>}
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+          <img src="/KSVGH.png" alt="" style={{ width: '36px', height: '36px', objectFit: 'contain', borderRadius: '50%' }} />
+          <div>
+            <h1 className="page-title" style={{ fontSize: 'var(--font-base)' }}>研究者儀表板</h1>
+            <p className="page-subtitle" style={{ fontSize: 'var(--font-xs)' }}>
+              {userInfo?.role === 'pi' ? '主持人' : '研究團隊'}
+              {isDemo && <span style={{ color: 'var(--warning)', marginLeft: '8px' }}>（Demo）</span>}
+            </p>
+          </div>
         </div>
         <button
           onClick={onLogout}

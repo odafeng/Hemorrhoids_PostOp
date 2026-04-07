@@ -60,7 +60,7 @@ describe('Dashboard Page (Demo Mode)', () => {
 
   it('renders page title', async () => {
     render(<Dashboard {...defaultProps} />, { wrapper: TestQueryWrapper });
-    await waitFor(() => expect(screen.getByText('術後追蹤')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('術後追蹤系統')).toBeInTheDocument());
   });
 
   it('displays surgery date', async () => {

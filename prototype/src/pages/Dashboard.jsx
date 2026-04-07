@@ -93,12 +93,15 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout, onSy
     <div className="page">
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <h1 className="page-title">術後追蹤</h1>
-          <p className="page-subtitle">
-            手術日期：{surgeryDate}
-            {isDemo && <span style={{ color: 'var(--warning)', marginLeft: '8px' }}>（Demo）</span>}
-          </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+          <img src="/KSVGH.png" alt="" style={{ width: '36px', height: '36px', objectFit: 'contain', borderRadius: '50%' }} />
+          <div>
+            <h1 className="page-title" style={{ fontSize: 'var(--font-base)' }}>術後追蹤系統</h1>
+            <p className="page-subtitle" style={{ fontSize: 'var(--font-xs)' }}>
+              手術日期：{surgeryDate}
+              {isDemo && <span style={{ color: 'var(--warning)', marginLeft: '8px' }}>（Demo）</span>}
+            </p>
+          </div>
         </div>
         <button
           onClick={onLogout}

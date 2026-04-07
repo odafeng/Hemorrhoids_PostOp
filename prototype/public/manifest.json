@@ -1,7 +1,7 @@
 {
-  "name": "術後追蹤系統 — 痔瘡手術術後症狀監測與 AI 衛教",
-  "short_name": "術後追蹤",
-  "description": "痔瘡手術術後症狀回報、規則引擎警示與 AI 衛教系統",
+  "name": "高雄榮總 術後追蹤系統",
+  "short_name": "高榮術後追蹤",
+  "description": "高雄榮民總醫院 大腸直腸外科 — 痔瘡手術術後症狀回報與 AI 衛教",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a1628",

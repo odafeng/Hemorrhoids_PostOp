@@ -13,7 +13,7 @@ export default function AIChat({ isDemo, userInfo }) {
 
   const welcomeMsg = {
     role: 'ai',
-    text: '您好！我是術後衛教 AI 助手 👋\n\n我可以回答關於痔瘡手術後恢復的一般性問題，例如疼痛管理、傷口照護、飲食建議等。\n\n請選擇下方的常見問題，或直接輸入您的問題。',
+    text: '您好！我是高雄榮總術後衛教 AI 助手。\n\n我可以回答關於痔瘡手術後恢復的一般性問題，例如疼痛管理、傷口照護、飲食建議等。\n\n請選擇下方的常見問題，或直接輸入您的問題。',
   };
 
   useEffect(() => {
