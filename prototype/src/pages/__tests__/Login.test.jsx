@@ -42,12 +42,13 @@ describe('Login Page', () => {
     expect(registerTab).toBeTruthy();
   });
 
-  it('switches to register mode and shows study ID and invite code fields', () => {
+  it('switches to register mode and shows surgeon selector and invite code fields', () => {
     render(<Login onLogin={vi.fn()} />);
     const toggleBtns = screen.getAllByRole('button');
     const registerTab = toggleBtns.find(b => b.textContent.trim() === '註冊' && b.classList.contains('toggle-btn'));
     fireEvent.click(registerTab);
-    expect(screen.getByPlaceholderText('例如：HEM-001')).toBeInTheDocument();
+    expect(screen.getByText('請選擇主刀醫師')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('001')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('請輸入研究團隊提供的邀請碼')).toBeInTheDocument();
     expect(screen.getByText('手術日期')).toBeInTheDocument();
   });
@@ -142,10 +143,12 @@ describe('Login Page', () => {
     fireEvent.click(toggleBtns.find(b => b.textContent.trim() === '註冊'));
 
     fireEvent.change(screen.getByPlaceholderText('請輸入研究團隊提供的邀請碼'), { target: { value: 'ABC123' } });
-    fireEvent.change(screen.getByPlaceholderText('例如：HEM-001'), { target: { value: 'HEM-099' } });
+    // Select surgeon
+    fireEvent.change(screen.getByDisplayValue('請選擇主刀醫師'), { target: { value: 'HSF' } });
+    // Enter patient number
+    fireEvent.change(screen.getByPlaceholderText('001'), { target: { value: '99' } });
     fireEvent.change(screen.getByPlaceholderText('your@email.com'), { target: { value: 'new@test.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'pass123' } });
-    // Set surgery date — find by type=date
     const dateInput = document.querySelector('input[type="date"]');
     fireEvent.change(dateInput, { target: { value: '2026-03-15' } });
 
@@ -153,6 +156,9 @@ describe('Login Page', () => {
 
     await waitFor(() => {
       expect(mockSignUp).toHaveBeenCalled();
+      // study_id should be composed as HSF-099
+      const callArgs = mockSignUp.mock.calls[0];
+      expect(callArgs[2].study_id).toBe('HSF-099');
       expect(alertSpy).toHaveBeenCalledWith('帳號建立成功！請登入。');
     });
     alertSpy.mockRestore();
@@ -164,11 +170,12 @@ describe('Login Page', () => {
     const toggleBtns = screen.getAllByRole('button');
     fireEvent.click(toggleBtns.find(b => b.textContent.trim() === '註冊'));
 
-    // Leave invite code as whitespace
+    // Leave invite code as whitespace, fill other fields
     fireEvent.change(screen.getByPlaceholderText('請輸入研究團隊提供的邀請碼'), { target: { value: '  ' } });
+    fireEvent.change(screen.getByDisplayValue('請選擇主刀醫師'), { target: { value: 'HSF' } });
+    fireEvent.change(screen.getByPlaceholderText('001'), { target: { value: '1' } });
     fireEvent.change(screen.getByPlaceholderText('your@email.com'), { target: { value: 'test@test.com' } });
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'pass123' } });
-    fireEvent.change(screen.getByPlaceholderText('例如：HEM-001'), { target: { value: 'HEM-001' } });
     const dateInput = document.querySelector('input[type="date"]');
     fireEvent.change(dateInput, { target: { value: '2026-03-15' } });
 
@@ -176,6 +183,26 @@ describe('Login Page', () => {
 
     await waitFor(() => {
       expect(screen.getByText('請輸入邀請碼。')).toBeInTheDocument();
+    });
+  });
+
+  it('shows error when no surgeon selected', async () => {
+    render(<Login onLogin={vi.fn()} />);
+    const toggleBtns = screen.getAllByRole('button');
+    fireEvent.click(toggleBtns.find(b => b.textContent.trim() === '註冊'));
+
+    fireEvent.change(screen.getByPlaceholderText('請輸入研究團隊提供的邀請碼'), { target: { value: 'ABC' } });
+    // Don't select surgeon
+    fireEvent.change(screen.getByPlaceholderText('001'), { target: { value: '1' } });
+    fireEvent.change(screen.getByPlaceholderText('your@email.com'), { target: { value: 'test@test.com' } });
+    fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'pass123' } });
+    const dateInput = document.querySelector('input[type="date"]');
+    fireEvent.change(dateInput, { target: { value: '2026-03-15' } });
+
+    fireEvent.submit(screen.getByText('建立帳號'));
+
+    await waitFor(() => {
+      expect(screen.getByText('請選擇主刀醫師。')).toBeInTheDocument();
     });
   });
 

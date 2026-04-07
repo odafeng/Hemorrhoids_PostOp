@@ -4,6 +4,18 @@ import { signIn, signUp, resetPassword } from '../utils/supabaseService';
 const SAVED_EMAIL_KEY = 'saved_login_email';
 const REMEMBER_KEY = 'remember_login';
 
+// Surgeon list — prefix → name
+const SURGEONS = [
+  { prefix: 'HSF', name: '黃士峯' },
+  { prefix: 'HCW', name: '許詔文' },
+  { prefix: 'WJH', name: '王瑞和' },
+  { prefix: 'CPT', name: '朱炳騰' },
+  { prefix: 'WCC', name: '吳志謙' },
+  { prefix: 'LMH', name: '李明泓' },
+  { prefix: 'CYH', name: '陳禹勳' },
+  { prefix: 'FIH', name: '方翊軒' },
+];
+
 // Supabase error messages → 中文翻譯
 const ERROR_MAP = {
   'Invalid login credentials': '帳號或密碼錯誤，請重新輸入',
@@ -31,7 +43,8 @@ export default function Login({ onLogin }) {
   const [mode, setMode] = useState('login'); // 'login' | 'register' | 'forgot'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [studyId, setStudyId] = useState('');
+  const [surgeonPrefix, setSurgeonPrefix] = useState('');
+  const [patientNumber, setPatientNumber] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [surgeryDate, setSurgeryDate] = useState('');
   const [error, setError] = useState('');
@@ -62,6 +75,13 @@ export default function Login({ onLogin }) {
         if (!inviteCode.trim()) {
           throw new Error('請輸入邀請碼。');
         }
+        if (!surgeonPrefix) {
+          throw new Error('請選擇主刀醫師。');
+        }
+        if (!patientNumber.trim() || !/^\d{1,4}$/.test(patientNumber.trim())) {
+          throw new Error('請輸入病人編號（1-4 位數字）。');
+        }
+        const studyId = `${surgeonPrefix}-${patientNumber.trim().padStart(3, '0')}`;
         // Store invite token for patient-onboard Edge Function to verify
         sessionStorage.setItem('invite_token', inviteCode.trim());
         await signUp(email, password, {
@@ -173,15 +193,46 @@ export default function Login({ onLogin }) {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">研究編號 <span>(Study ID)</span></label>
-                  <input
+                  <label className="form-label">主刀醫師</label>
+                  <select
                     className="chat-input"
-                    style={{ width: '100%' }}
-                    placeholder="例如：HEM-001"
-                    value={studyId}
-                    onChange={e => setStudyId(e.target.value)}
+                    style={{ width: '100%', appearance: 'auto' }}
+                    value={surgeonPrefix}
+                    onChange={e => setSurgeonPrefix(e.target.value)}
                     required
-                  />
+                  >
+                    <option value="">請選擇主刀醫師</option>
+                    {SURGEONS.map(s => (
+                      <option key={s.prefix} value={s.prefix}>{s.name}（{s.prefix}）</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">病人編號</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+                    <span style={{
+                      fontSize: 'var(--font-sm)', color: 'var(--accent)', fontWeight: 600,
+                      minWidth: '40px', textAlign: 'right',
+                    }}>
+                      {surgeonPrefix || '???'}-
+                    </span>
+                    <input
+                      className="chat-input"
+                      style={{ flex: 1 }}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="001"
+                      value={patientNumber}
+                      onChange={e => setPatientNumber(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                      required
+                    />
+                  </div>
+                  {surgeonPrefix && patientNumber && (
+                    <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      研究編號：<strong style={{ color: 'var(--accent)' }}>{surgeonPrefix}-{patientNumber.padStart(3, '0')}</strong>
+                    </div>
+                  )}
                 </div>
                 </>
               )}

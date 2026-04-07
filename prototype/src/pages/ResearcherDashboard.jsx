@@ -156,8 +156,8 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
 
   // Surgeon prefix mapping
   const SURGEON_NAMES = {
-    HSF: '黃士峯',
-    // Add more surgeons here as needed
+    HSF: '黃士峯', HCW: '許詔文', WJH: '王瑞和', CPT: '朱炳騰',
+    WCC: '吳志謙', LMH: '李明泓', CYH: '陳禹勳', FIH: '方翊軒',
   };
 
   // Extract unique surgeon IDs from patients
