@@ -244,7 +244,7 @@ describe('AIChat Page', () => {
       fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
 
       await waitFor(() => {
-        expect(sb.saveChatLog).toHaveBeenCalledWith('HEM-001', '測試', 'AI answer');
+        expect(sb.saveChatLog).toHaveBeenCalledWith('HEM-001', '測試', 'AI answer', null);
       }, { timeout: 3000 });
     });
 
