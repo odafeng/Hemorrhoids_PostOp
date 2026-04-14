@@ -159,6 +159,15 @@ export default function ChatReview({ onNavigate, isDemo, userInfo }) {
         <div key={chat.id} className="card review-card" style={{ animationDelay: `${i * 0.05}s` }}>
           <div className="review-meta">
             <span className="review-study-id">{chat.study_id}</span>
+            <span style={{
+              fontSize: 'var(--font-xs)',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              background: chat.matched_topic ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.15)',
+              color: chat.matched_topic ? '#34c759' : '#ff9500',
+            }}>
+              {chat.matched_topic ? '📚 知識庫' : '⚠️ 通用回覆'}
+            </span>
             <span className="review-date">{chat.created_at}</span>
           </div>
 
@@ -215,6 +224,15 @@ export default function ChatReview({ onNavigate, isDemo, userInfo }) {
             <div key={chat.id} className="card review-card" style={{ opacity: 0.7 }}>
               <div className="review-meta">
                 <span className="review-study-id">{chat.study_id}</span>
+                <span style={{
+                  fontSize: 'var(--font-xs)',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  background: chat.matched_topic ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.15)',
+                  color: chat.matched_topic ? '#34c759' : '#ff9500',
+                }}>
+                  {chat.matched_topic ? '📚 知識庫' : '⚠️ 通用回覆'}
+                </span>
                 <span className={`status-badge ${chat.review_result === 'correct' ? 'completed' : 'pending'}`}>
                   {chat.review_result === 'correct' ? '✓ 正確' : '✗ 需修正'}
                 </span>

@@ -61,6 +61,7 @@ export default function AIChat({ isDemo, userInfo }) {
 
     let response;
     let source = 'mock';
+    let ragSources = null;
     if (isDemo) {
       await new Promise(r => setTimeout(r, 600 + Math.random() * 800));
       response = getAIResponse(text);
@@ -87,6 +88,7 @@ export default function AIChat({ isDemo, userInfo }) {
       // Final update with complete text
       response = result.text;
       source = result.source;
+      ragSources = result.ragSources || null;
       setMessages(prev => {
         const updated = [...prev];
         updated[updated.length - 1] = { role: 'ai', text: response, source };
@@ -102,7 +104,10 @@ export default function AIChat({ isDemo, userInfo }) {
       saveChatMessage({ role: 'ai', text: response, source });
     } else if (userInfo?.studyId) {
       try {
-        await sb.saveChatLog(userInfo.studyId, text.trim(), response);
+        const topic = ragSources && ragSources.length > 0
+          ? ragSources.map(s => s.title || s.source_file).join('; ')
+          : null;
+        await sb.saveChatLog(userInfo.studyId, text.trim(), response, topic);
       } catch (err) {
         console.error('Save chat error:', err);
       }

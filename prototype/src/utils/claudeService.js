@@ -76,6 +76,7 @@ export async function getClaudeResponse(question, options = {}, onChunk = null) 
       const decoder = new TextDecoder();
       let buffer = '';
       let fullText = '';
+      let ragSources = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -93,11 +94,14 @@ export async function getClaudeResponse(question, options = {}, onChunk = null) 
               fullText += event.text;
               onChunk(fullText);
             }
+            if (event.type === 'done' && event.sources) {
+              ragSources = event.sources;
+            }
           } catch { /* skip */ }
         }
       }
 
-      return { text: fullText || '抱歉，目前無法回覆，請稍後再試。', source: 'claude' };
+      return { text: fullText || '抱歉，目前無法回覆，請稍後再試。', source: 'claude', ragSources };
     }
 
     // Fallback: non-streaming JSON response
