@@ -160,7 +160,7 @@ Deno.serve(async (req: Request) => {
               "match_documents",
               {
                 query_embedding: JSON.stringify(queryEmbedding),
-                match_threshold: 0.3,
+                match_threshold: 0.5,
                 match_count: 3,
               }
             );
