@@ -1,30 +1,54 @@
 import { useState, useEffect } from 'react';
-import { saveReport as saveLocalReport, getTodayReport, getPOD } from '../utils/storage';
+import { useSearchParams } from 'react-router-dom';
+import {
+  saveReport as saveLocalReport,
+  getTodayReport,
+  getReportByDate as getLocalReportByDate,
+} from '../utils/storage';
 import * as sb from '../utils/supabaseService';
 import { enqueueReport } from '../utils/offlineQueue';
+import * as I from '../components/Icons';
 
 const bleedingOptions = [
-  { value: '無', label: '無', desc: '無任何出血' },
-  { value: '少量', label: '少量', desc: '擦拭時見血、點狀血跡' },
-  { value: '持續', label: '持續', desc: '排便後滴血、馬桶水變色' },
-  { value: '血塊', label: '血塊', desc: '可見血塊排出' },
+  { v: '無', d: '無任何出血' },
+  { v: '少量', d: '擦拭時見血、點狀血跡' },
+  { v: '持續', d: '排便後滴血、馬桶水變色', danger: true },
+  { v: '血塊', d: '可見血塊排出', danger: true },
 ];
 const bowelOptions = ['正常', '困難', '未排'];
 const continenceOptions = [
-  { value: '正常', label: '正常', desc: '可以控制' },
-  { value: '滲便', label: '偶爾滲漏', desc: '內褲有少量污漬、不自覺漏出' },
-  { value: '失禁', label: '無法控制', desc: '來不及上廁所、大量漏出' },
+  { v: '正常', label: '正常', d: '可以控制' },
+  { v: '滲便', label: '偶爾滲漏', d: '內褲有少量污漬、不自覺漏出' },
+  { v: '失禁', label: '無法控制', d: '來不及上廁所、大量漏出', danger: true },
 ];
 const urinaryOptions = [
-  { value: '正常', label: '正常', desc: '排尿順暢' },
-  { value: '困難', label: '不太順', desc: '尿得出來但要等或要用力' },
-  { value: '尿不出來', label: '完全尿不出來', desc: '想尿但完全排不出，腹部脹痛' },
+  { v: '正常', label: '正常', d: '排尿順暢' },
+  { v: '困難', label: '不太順', d: '尿得出來但要等或要用力' },
+  { v: '尿不出來', label: '完全尿不出來', d: '想尿但完全排不出，腹部脹痛', danger: true },
 ];
 const woundOptions = ['無異常', '腫脹', '分泌物', '搔癢', '異物感', '其他'];
 
+const PAIN_WORD = (v) => v === 0 ? '無痛' : v <= 3 ? '輕度疼痛' : v <= 6 ? '中度疼痛' : v <= 8 ? '嚴重疼痛' : '劇烈疼痛';
+const PAIN_COLOR = (v) => v <= 3 ? 'var(--ok)' : v <= 6 ? 'var(--warn)' : 'var(--danger)';
+
 export default function SymptomReport({ onComplete, isDemo, userInfo }) {
-  // Synchronous pre-fill for demo mode (prevents empty-form flash)
-  const demoExisting = isDemo ? getTodayReport() : null;
+  const [searchParams] = useSearchParams();
+  const editDate = searchParams.get('date') || null; // YYYY-MM-DD of past report to edit
+  const isEditingPast = !!editDate && editDate !== new Date().toLocaleDateString('en-CA');
+
+  const targetDate = editDate || new Date().toLocaleDateString('en-CA');
+  const calcPodForDate = (date) => {
+    if (!userInfo?.surgeryDate || !date) return 0;
+    const s = new Date(userInfo.surgeryDate);
+    const t = new Date(date);
+    s.setHours(0, 0, 0, 0); t.setHours(0, 0, 0, 0);
+    return Math.max(0, Math.floor((t - s) / (1000 * 60 * 60 * 24)));
+  };
+  const targetPod = calcPodForDate(targetDate);
+
+  const demoExisting = isDemo
+    ? (editDate ? getLocalReportByDate(editDate) : getTodayReport())
+    : null;
 
   const parseWound = (raw) => {
     if (!raw) return { items: [], other: '' };
@@ -47,12 +71,13 @@ export default function SymptomReport({ onComplete, isDemo, userInfo }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // Async pre-fill for Supabase mode only
   useEffect(() => {
     if (isDemo || !userInfo?.studyId) return;
-    const loadExisting = async () => {
+    const load = async () => {
       try {
-        const report = await sb.getTodayReport(userInfo.studyId);
+        const report = editDate
+          ? await sb.getReportByDate(userInfo.studyId, editDate)
+          : await sb.getTodayReport(userInfo.studyId);
         if (report) {
           setPain(report.pain_nrs ?? 3);
           setBleeding(report.bleeding ?? '');
@@ -69,34 +94,18 @@ export default function SymptomReport({ onComplete, isDemo, userInfo }) {
       }
       setLoadingExisting(false);
     };
-    loadExisting();
-  }, [isDemo, userInfo?.studyId]);
+    load();
+  }, [isDemo, userInfo?.studyId, editDate]);
 
   const toggleWound = (opt) => {
     setWound(prev => {
-      if (opt === '無異常') {
-        return prev.includes('無異常') ? [] : ['無異常'];
-      }
+      if (opt === '無異常') return prev.includes('無異常') ? [] : ['無異常'];
       const without = prev.filter(w => w !== '無異常');
       return without.includes(opt) ? without.filter(w => w !== opt) : [...without, opt];
     });
   };
 
   const isValid = bleeding && bowel && continence && urinary && wound.length > 0 && (!wound.includes('其他') || woundOther.trim());
-
-  const getPainColor = (v) => {
-    if (v <= 3) return 'var(--success)';
-    if (v <= 6) return 'var(--warning)';
-    return 'var(--danger)';
-  };
-
-  const getPainText = (v) => {
-    if (v === 0) return '無痛';
-    if (v <= 3) return '輕度疼痛';
-    if (v <= 6) return '中度疼痛';
-    if (v <= 8) return '嚴重疼痛';
-    return '劇烈疼痛';
-  };
 
   const handleSubmit = async () => {
     if (!isValid || submitting) return;
@@ -108,19 +117,9 @@ export default function SymptomReport({ onComplete, isDemo, userInfo }) {
 
     try {
       if (isDemo) {
-        saveLocalReport(report);
+        saveLocalReport(report, targetDate, targetPod);
       } else {
-        // Recalculate POD from surgery_date (don't trust cached userInfo.pod)
-        let pod = 0;
-        if (userInfo?.surgeryDate) {
-          const s = new Date(userInfo.surgeryDate);
-          const t = new Date();
-          s.setHours(0, 0, 0, 0);
-          t.setHours(0, 0, 0, 0);
-          pod = Math.max(0, Math.floor((t - s) / (1000 * 60 * 60 * 24)));
-        }
-        // Timeout protection: prevent infinite "提交中" in PWA
-        const savePromise = sb.saveReport(userInfo.studyId, pod, report);
+        const savePromise = sb.saveReport(userInfo.studyId, targetPod, report, targetDate);
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('提交逾時，請檢查網路後重試')), 10000)
         );
@@ -135,17 +134,7 @@ export default function SymptomReport({ onComplete, isDemo, userInfo }) {
     } catch (err) {
       console.error('Submit error:', err);
       if (!isDemo && userInfo?.studyId && !navigator.onLine) {
-        // Offline: queue for later submission
-        let pod = 0;
-        if (userInfo?.surgeryDate) {
-          const s = new Date(userInfo.surgeryDate);
-          const t = new Date();
-          s.setHours(0, 0, 0, 0);
-          t.setHours(0, 0, 0, 0);
-          pod = Math.max(0, Math.floor((t - s) / (1000 * 60 * 60 * 24)));
-        }
-        const woundValue = wound.map(w => w === '其他' ? `其他:${woundOther.trim()}` : w).join(',');
-        enqueueReport(userInfo.studyId, pod, { pain, bleeding, bowel, fever, continence, urinary, wound: woundValue });
+        enqueueReport(userInfo.studyId, targetPod, { pain, bleeding, bowel, fever, continence, urinary, wound: woundValue }, targetDate);
         setShowSuccess(true);
         setTimeout(() => {
           setShowSuccess(false);
@@ -162,7 +151,7 @@ export default function SymptomReport({ onComplete, isDemo, userInfo }) {
   if (loadingExisting) {
     return (
       <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-        <p style={{ color: 'var(--text-secondary)', animation: 'pulse 1s infinite' }}>載入中...</p>
+        <p style={{ color: 'var(--ink-2)', animation: 'pulse 1s infinite', fontFamily: 'var(--font-mono)' }}>載入中…</p>
       </div>
     );
   }
@@ -170,133 +159,166 @@ export default function SymptomReport({ onComplete, isDemo, userInfo }) {
   if (showSuccess) {
     return (
       <div className="success-overlay">
-        <div className="success-checkmark">✓</div>
-        <div className="success-text">回報成功</div>
-        <div className="success-sub">感謝您的填寫，祝您早日康復</div>
+        <div className="success-checkmark"><I.Check width={40} height={40} /></div>
+        <div className="success-text">{isEditingPast ? '修改成功' : '回報成功'}</div>
+        <div className="success-sub">{isEditingPast ? '資料已同步更新' : '感謝您的填寫，祝您早日康復'}</div>
       </div>
     );
   }
 
+  const displayDate = new Date(targetDate).toLocaleDateString('zh-TW');
+
   return (
     <div className="page">
-      <h1 className="page-title">症狀回報</h1>
-      <p className="page-subtitle">請填寫今日的身體狀況（約 30 秒）</p>
+      <div className="topbar">
+        <button className="icon-btn" onClick={() => onComplete()} aria-label="返回">
+          <I.ArrowLeft width={17} height={17} />
+        </button>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--ink-3)', letterSpacing: '0.1em' }}>
+          POD {targetPod} · {displayDate}
+        </div>
+        <div style={{ width: 36 }} />
+      </div>
 
-      {/* Pain NRS */}
-      <div className="form-group">
-        <label className="form-label">疼痛分數 <span>（NRS 0–10）</span></label>
-        <div className="pain-slider-container">
-          <div className="pain-value-display">
-            <div className="pain-number" style={{ color: getPainColor(pain) }}>{pain}</div>
-            <div className="pain-label">{getPainText(pain)}</div>
+      <div className="page-head">
+        <div className="eyebrow">{isEditingPast ? 'EDIT PAST REPORT' : 'DAILY REPORT'}</div>
+        <h1 className="page-title">{isEditingPast ? `修改 POD ${targetPod} 回報` : '今日症狀回報'}</h1>
+        <p className="page-sub">
+          {isEditingPast
+            ? `修改 ${displayDate} 的症狀紀錄 · 儲存後會同步更新資料庫`
+            : '完整填寫約 30 秒 · 所有欄位為必填'}
+        </p>
+      </div>
+
+      {/* Pain slider hero */}
+      <div className="pain-hero">
+        <div className="field-lbl" style={{ marginBottom: 4 }}>疼痛分數 <span className="hint">NRS 0–10</span></div>
+        <div className="pain-display">
+          <div className="pain-num" style={{ color: PAIN_COLOR(pain) }}>
+            {pain}<span className="of">/10</span>
           </div>
-          <input type="range" className="pain-slider" min="0" max="10" value={pain} onChange={e => setPain(Number(e.target.value))} />
-          <div className="pain-scale">
-            <span>0 無痛</span><span>5 中度</span><span>10 劇痛</span>
+          <div className="pain-word">
+            Level
+            <span className="lvl" style={{ color: PAIN_COLOR(pain) }}>{PAIN_WORD(pain)}</span>
           </div>
+        </div>
+        <div className="slider-wrap">
+          <div className="slider-track-bg">
+            <div className="slider-track-fill" style={{ width: `${(pain / 10) * 100}%`, background: PAIN_COLOR(pain) }} />
+          </div>
+          <input type="range" className="slider" min="0" max="10" value={pain} onChange={e => setPain(Number(e.target.value))} />
+        </div>
+        <div className="slider-ticks">
+          <span>0 · 無痛</span>
+          <span>5 · 中度</span>
+          <span>10 · 劇痛</span>
         </div>
       </div>
 
       {/* Bleeding */}
-      <div className="form-group">
-        <label className="form-label">出血程度</label>
-        <div className="option-group" style={{ flexDirection: 'column', gap: 'var(--space-sm)' }}>
-          {bleedingOptions.map(opt => (
-            <button key={opt.value}
-              className={`option-pill ${bleeding === opt.value ? (opt.value === '持續' || opt.value === '血塊' ? 'danger-selected' : 'selected') : ''}`}
-              onClick={() => setBleeding(opt.value)}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '10px 14px' }}>
-              <span style={{ fontWeight: 600 }}>{opt.label}</span>
-              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', fontWeight: 400 }}>{opt.desc}</span>
+      <div className="field">
+        <div className="field-lbl">出血程度</div>
+        <div className="opt-stack">
+          {bleedingOptions.map(o => (
+            <button key={o.v} type="button"
+              className={`opt ${bleeding === o.v ? (o.danger ? 'selected danger' : 'selected') : ''}`}
+              onClick={() => setBleeding(o.v)}>
+              <span className="opt-main">{o.v}</span>
+              <span className="opt-desc">{o.d}</span>
             </button>
           ))}
         </div>
       </div>
 
       {/* Bowel */}
-      <div className="form-group">
-        <label className="form-label">排便狀況</label>
-        <div className="option-group">
-          {bowelOptions.map(opt => (
-            <button key={opt} className={`option-pill ${bowel === opt ? 'selected' : ''}`} onClick={() => setBowel(opt)}>{opt}</button>
+      <div className="field">
+        <div className="field-lbl">排便狀況</div>
+        <div className="opt-row">
+          {bowelOptions.map(v => (
+            <button key={v} type="button"
+              className={`opt ${bowel === v ? 'selected' : ''}`}
+              onClick={() => setBowel(v)}>
+              <span className="opt-main">{v}</span>
+            </button>
           ))}
         </div>
       </div>
 
       {/* Continence */}
-      <div className="form-group">
-        <label className="form-label">肛門控制</label>
-        <div className="option-group" style={{ flexDirection: 'column', gap: 'var(--space-sm)' }}>
-          {continenceOptions.map(opt => (
-            <button key={opt.value}
-              className={`option-pill ${continence === opt.value ? (opt.value === '失禁' ? 'danger-selected' : 'selected') : ''}`}
-              onClick={() => setContinence(opt.value)}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '10px 14px' }}>
-              <span style={{ fontWeight: 600 }}>{opt.label}</span>
-              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', fontWeight: 400 }}>{opt.desc}</span>
+      <div className="field">
+        <div className="field-lbl">肛門控制</div>
+        <div className="opt-stack">
+          {continenceOptions.map(o => (
+            <button key={o.v} type="button"
+              className={`opt ${continence === o.v ? (o.danger ? 'selected danger' : 'selected') : ''}`}
+              onClick={() => setContinence(o.v)}>
+              <span className="opt-main">{o.label}</span>
+              <span className="opt-desc">{o.d}</span>
             </button>
           ))}
         </div>
       </div>
 
       {/* Fever */}
-      <div className="form-group">
-        <label className="form-label">發燒 <span>（體溫 ≥ 38°C）</span></label>
-        <div className="toggle-group">
-          <button className={`toggle-btn ${fever === false ? 'selected' : ''}`} onClick={() => setFever(false)}>否</button>
-          <button className={`toggle-btn ${fever === true ? 'danger-selected' : ''}`} onClick={() => setFever(true)}>是</button>
+      <div className="field">
+        <div className="field-lbl">發燒 <span className="hint">體溫 ≥ 38°C</span></div>
+        <div className="opt-row">
+          <button type="button" className={`opt ${fever === false ? 'selected' : ''}`} onClick={() => setFever(false)}>
+            <span className="opt-main">否</span>
+          </button>
+          <button type="button" className={`opt ${fever === true ? 'selected danger' : ''}`} onClick={() => setFever(true)}>
+            <span className="opt-main">是</span>
+          </button>
         </div>
       </div>
 
       {/* Urinary */}
-      <div className="form-group">
-        <label className="form-label">排尿狀況</label>
-        <div className="option-group" style={{ flexDirection: 'column', gap: 'var(--space-sm)' }}>
-          {urinaryOptions.map(opt => (
-            <button key={opt.value}
-              className={`option-pill ${urinary === opt.value ? (opt.value === '尿不出來' ? 'danger-selected' : 'selected') : ''}`}
-              onClick={() => setUrinary(opt.value)}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '10px 14px' }}>
-              <span style={{ fontWeight: 600 }}>{opt.label}</span>
-              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', fontWeight: 400 }}>{opt.desc}</span>
+      <div className="field">
+        <div className="field-lbl">排尿狀況</div>
+        <div className="opt-stack">
+          {urinaryOptions.map(o => (
+            <button key={o.v} type="button"
+              className={`opt ${urinary === o.v ? (o.danger ? 'selected danger' : 'selected') : ''}`}
+              onClick={() => setUrinary(o.v)}>
+              <span className="opt-main">{o.label}</span>
+              <span className="opt-desc">{o.d}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Wound — Multi-select */}
-      <div className="form-group">
-        <label className="form-label">傷口狀況 <span>（可複選）</span></label>
-        <div className="option-group" style={{ flexWrap: 'wrap' }}>
-          {woundOptions.map(opt => (
-            <button key={opt}
-              className={`option-pill ${wound.includes(opt) ? 'selected' : ''}`}
-              onClick={() => toggleWound(opt)}>{opt}</button>
+      {/* Wound (multi) */}
+      <div className="field">
+        <div className="field-lbl">傷口狀況 <span className="hint">可複選</span></div>
+        <div className="chip-grid">
+          {woundOptions.map(w => (
+            <button key={w} type="button"
+              className={`chip ${wound.includes(w) ? 'selected' : ''}`}
+              onClick={() => toggleWound(w)}>{w}</button>
           ))}
         </div>
         {wound.includes('其他') && (
-          <input
-            className="chat-input"
-            style={{ width: '100%', marginTop: 'var(--space-sm)' }}
-            placeholder="請描述傷口狀況..."
+          <input className="input" style={{ marginTop: 8 }}
+            placeholder="請描述傷口狀況…"
             value={woundOther}
-            onChange={e => setWoundOther(e.target.value)}
-          />
+            onChange={e => setWoundOther(e.target.value)} />
         )}
       </div>
 
-      {/* Error */}
       {error && (
-        <div className="alert-banner danger" style={{ marginBottom: 'var(--space-md)' }}>
-          <span className="alert-icon">⚠️</span>
-          <div className="alert-content"><div className="alert-message">{error}</div></div>
+        <div className="alert-banner danger" style={{ marginBottom: 12 }}>
+          <div className="al-icon"><I.Alert width={18} height={18} /></div>
+          <div><div className="al-msg">{error}</div></div>
         </div>
       )}
 
-      {/* Submit */}
-      <button className="btn btn-primary" disabled={!isValid || submitting} onClick={handleSubmit} style={{ marginTop: 'var(--space-md)' }}>
-        {submitting ? '提交中...' : '提交回報'}
+      <button className="btn btn-primary" disabled={!isValid || submitting} onClick={handleSubmit}>
+        {submitting ? '提交中…' : <>{isEditingPast ? '儲存修改' : '提交回報'} <I.Check width={16} height={16} /></>}
       </button>
+      <div style={{ fontSize: 11, color: 'var(--ink-3)', textAlign: 'center', marginTop: 10, fontFamily: 'var(--font-mono)' }}>
+        <I.Shield width={11} height={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+        資料經過去識別化加密儲存
+      </div>
     </div>
   );
 }

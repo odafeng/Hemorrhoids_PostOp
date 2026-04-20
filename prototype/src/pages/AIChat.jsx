@@ -3,6 +3,7 @@ import { getAIResponse, quickQuestions } from '../utils/mockAI';
 import { getClaudeResponse } from '../utils/claudeService';
 import { getChatHistory, saveChatMessage } from '../utils/storage';
 import * as sb from '../utils/supabaseService';
+import * as I from '../components/Icons';
 
 export default function AIChat({ isDemo, userInfo }) {
   const [messages, setMessages] = useState([]);
@@ -46,14 +47,11 @@ export default function AIChat({ isDemo, userInfo }) {
   }, [isDemo, userInfo]);
 
   useEffect(() => {
-    if (loaded) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
+    if (loaded) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loaded]);
 
   const sendMessage = async (text) => {
     if (!text.trim()) return;
-
     const userMsg = { role: 'user', text: text.trim() };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
@@ -66,26 +64,18 @@ export default function AIChat({ isDemo, userInfo }) {
       await new Promise(r => setTimeout(r, 600 + Math.random() * 800));
       response = getAIResponse(text);
       source = 'mock';
-
-      const aiMsg = { role: 'ai', text: response, source };
-      setMessages(prev => [...prev, aiMsg]);
+      setMessages(prev => [...prev, { role: 'ai', text: response, source }]);
     } else {
-      // Streaming: add placeholder AI message, then update it as chunks arrive
-      const aiMsgIndex = messages.length + 1; // +1 for the user msg we just added
-      setMessages(prev => [...prev, { role: 'ai', text: '...', source: 'claude' }]);
-      setIsTyping(false); // Hide typing indicator — streaming text is visible
-
+      setMessages(prev => [...prev, { role: 'ai', text: '…', source: 'claude' }]);
+      setIsTyping(false);
       const history = messages.filter(m => m.role === 'user' || m.role === 'ai');
       const result = await getClaudeResponse(text.trim(), { conversationHistory: history }, (textSoFar) => {
-        // Update the last AI message progressively
         setMessages(prev => {
           const updated = [...prev];
           updated[updated.length - 1] = { role: 'ai', text: textSoFar, source: 'claude' };
           return updated;
         });
       });
-
-      // Final update with complete text
       response = result.text;
       source = result.source;
       ragSources = result.ragSources || null;
@@ -98,7 +88,6 @@ export default function AIChat({ isDemo, userInfo }) {
 
     setIsTyping(false);
 
-    // Save
     if (isDemo) {
       saveChatMessage({ role: 'user', text: text.trim() });
       saveChatMessage({ role: 'ai', text: response, source });
@@ -121,54 +110,70 @@ export default function AIChat({ isDemo, userInfo }) {
     }
   };
 
+  const labelFor = (source) => {
+    if (source === 'error') return <>⚠ 系統通知</>;
+    if (source === 'mock') return <><I.Sparkle width={10} height={10} /> AI · 離線模式</>;
+    return <><I.Sparkle width={10} height={10} /> AI · Claude Haiku</>;
+  };
+
   return (
-    <div className="chat-container">
+    <div className="chat-screen">
+      <div className="topbar" style={{ padding: '8px 20px 4px' }}>
+        <button className="icon-btn" onClick={() => window.history.back()} aria-label="返回">
+          <I.ArrowLeft width={17} height={17} />
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="card-icon" style={{ width: 26, height: 26 }}>
+            <I.Sparkle width={13} height={13} />
+          </div>
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)', lineHeight: 1.1 }}>AI 衛教助手</div>
+            <div style={{ fontSize: 10, color: 'var(--ok)', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>● 線上</div>
+          </div>
+        </div>
+        <div style={{ width: 36 }} />
+      </div>
+
       <div className="chat-disclaimer">
-        ⚠️ 本系統僅提供衛教資訊，不提供診斷或治療建議。如有緊急狀況請聯絡醫療機構。
+        <I.Shield width={14} height={14} style={{ flex: '0 0 auto', color: 'var(--warn)' }} />
+        <span>本系統僅提供衛教資訊，不提供診斷或治療建議。如有緊急狀況請聯絡醫療機構。</span>
       </div>
 
       <div className="chat-messages">
         {messages.map((msg, i) => (
-          <div key={i} className={`chat-bubble ${msg.role === 'user' ? 'user' : 'ai'}`}>
+          <div key={i} className={`bubble ${msg.role === 'user' ? 'user' : 'ai'}`}>
             {msg.role === 'ai' && (
-              <div className="bubble-label">
-                {msg.source === 'error'
-                  ? '⚠️ 系統通知'
-                  : msg.source === 'mock'
-                  ? '📋 自動回覆（離線模式）'
-                  : '🤖 AI 衛教助手'}
-              </div>
+              <div className="bubble-label">{labelFor(msg.source)}</div>
             )}
             {msg.text}
             {msg.role === 'ai' && msg.source !== 'error' && i > 0 && (
-              <div style={{
-                fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '8px',
-                borderTop: '1px solid var(--border)', paddingTop: '6px',
-              }}>
-                ⚠️ 僅供衛教參考，不構成醫療建議。如有疑慮請聯絡醫療團隊。
+              <div className="bubble-foot">
+                僅供衛教參考 · 不構成醫療建議
               </div>
             )}
           </div>
         ))}
         {isTyping && (
-          <div className="chat-bubble ai" style={{ opacity: 0.7 }}>
-            <div className="bubble-label">🤖 AI 衛教助手</div>
-            <span style={{ animation: 'pulse 1s infinite' }}>正在回覆中...</span>
+          <div className="bubble ai" style={{ opacity: 0.7 }}>
+            <div className="bubble-label"><I.Sparkle width={10} height={10} /> AI · Claude Haiku</div>
+            <span style={{ letterSpacing: 4 }}>···</span>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
       <div className="chat-input-area">
-        <div className="quick-questions">
+        <div className="quick-qs">
           {quickQuestions.map((q, i) => (
             <button key={i} className="quick-q" onClick={() => sendMessage(q)} disabled={isTyping}>{q}</button>
           ))}
         </div>
         <div className="chat-input-row">
-          <input className="chat-input" placeholder="輸入您的問題..." value={input}
+          <input className="chat-input" placeholder="輸入您的問題…" value={input}
             onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} disabled={isTyping} />
-          <button className="chat-send" onClick={() => sendMessage(input)} disabled={!input.trim() || isTyping}>➤</button>
+          <button className="chat-send" onClick={() => sendMessage(input)} disabled={!input.trim() || isTyping}>
+            <I.Send width={14} height={14} />
+          </button>
         </div>
       </div>
     </div>

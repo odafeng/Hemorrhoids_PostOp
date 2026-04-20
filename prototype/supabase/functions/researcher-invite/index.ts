@@ -1,0 +1,121 @@
+// Supabase Edge Function: researcher-invite
+// PI invites a researcher (or another PI) by email.
+// Creates an auth.users row with role metadata and sends a magic-link invite email.
+
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
+import { getCorsHeaders } from "../_shared/cors.ts";
+
+Deno.serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req);
+
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // Verify caller is PI (only PI can invite new researchers)
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Invalid token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const callerRole = user.user_metadata?.role;
+    if (callerRole !== "pi") {
+      return new Response(JSON.stringify({ error: "只有主持人（PI）可以邀請研究人員" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const body = await req.json();
+    const email: string = (body.email || "").trim();
+    const displayName: string = (body.display_name || "").trim();
+    const role: string = body.role === "pi" ? "pi" : "researcher";
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return new Response(JSON.stringify({ error: "Email 格式不正確" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!displayName) {
+      return new Response(JSON.stringify({ error: "請輸入研究人員姓名" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Check if email already registered
+    const { data: { users }, error: listError } = await adminClient.auth.admin.listUsers();
+    if (listError) throw listError;
+    if (users.find((u) => u.email === email)) {
+      return new Response(JSON.stringify({ error: `${email} 已經註冊過` }), {
+        status: 409,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Send invitation email with metadata pre-filled
+    const { data, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
+      data: {
+        role,
+        display_name: displayName,
+        invited_by: user.id,
+        invited_at: new Date().toISOString(),
+      },
+    });
+    if (inviteError) throw inviteError;
+
+    // Audit
+    await adminClient.from("audit_trail").insert({
+      actor_id: user.id,
+      actor_role: callerRole,
+      action: "admin.invite_researcher",
+      resource: "auth.users",
+      resource_id: data.user?.id || email,
+      detail: { target_email: email, role, display_name: displayName },
+    });
+
+    return new Response(JSON.stringify({
+      success: true,
+      user: { id: data.user?.id, email, role, display_name: displayName },
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("researcher-invite error:", err);
+    return new Response(JSON.stringify({ error: err.message || "Internal error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});

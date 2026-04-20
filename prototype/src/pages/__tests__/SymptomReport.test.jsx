@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import SymptomReport from '../SymptomReport';
 
 // Mock supabaseService
@@ -8,14 +9,18 @@ vi.mock('../../utils/supabaseService', () => ({
   getAllReports: vi.fn().mockResolvedValue([]),
   createAlert: vi.fn().mockResolvedValue({}),
   getTodayReport: vi.fn().mockResolvedValue(null),
+  getReportByDate: vi.fn().mockResolvedValue(null),
 }));
 
 // Mock storage for demo mode
 vi.mock('../../utils/storage', () => ({
   getTodayReport: vi.fn().mockReturnValue(null),
+  getReportByDate: vi.fn().mockReturnValue(null),
   saveReport: vi.fn().mockReturnValue({ date: '2026-03-18', pain: 5 }),
   getPOD: vi.fn().mockReturnValue(5),
 }));
+
+const RouterWrapper = ({ children }) => <MemoryRouter>{children}</MemoryRouter>;
 
 describe('SymptomReport Page', () => {
   const defaultProps = {
@@ -29,21 +34,21 @@ describe('SymptomReport Page', () => {
   });
 
   it('renders page title and subtitle', () => {
-    render(<SymptomReport {...defaultProps} />);
-    expect(screen.getByText('症狀回報')).toBeInTheDocument();
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
+    expect(screen.getByText(/症狀回報/)).toBeInTheDocument();
     expect(screen.getByText(/約 30 秒/)).toBeInTheDocument();
   });
 
   it('renders pain slider with initial value', () => {
-    render(<SymptomReport {...defaultProps} />);
-    expect(screen.getByText('疼痛分數')).toBeInTheDocument();
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
+    expect(screen.getByText(/疼痛分數/)).toBeInTheDocument();
     const slider = screen.getByRole('slider');
     expect(slider).toBeInTheDocument();
     expect(slider.value).toBe('3'); // default
   });
 
   it('renders all bleeding options with descriptions', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     expect(screen.getByText('無')).toBeInTheDocument();
     expect(screen.getByText('無任何出血')).toBeInTheDocument();
     expect(screen.getByText('少量')).toBeInTheDocument();
@@ -52,28 +57,28 @@ describe('SymptomReport Page', () => {
   });
 
   it('renders all bowel options', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     const normals = screen.getAllByText('正常');
     expect(normals.length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('未排')).toBeInTheDocument();
   });
 
   it('renders fever toggle', () => {
-    render(<SymptomReport {...defaultProps} />);
-    expect(screen.getByText('發燒')).toBeInTheDocument();
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
+    expect(screen.getByText(/發燒/)).toBeInTheDocument();
     expect(screen.getByText('否')).toBeInTheDocument();
     expect(screen.getByText('是')).toBeInTheDocument();
   });
 
   it('renders all wound options', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     expect(screen.getByText('無異常')).toBeInTheDocument();
     expect(screen.getByText('腫脹')).toBeInTheDocument();
     expect(screen.getByText('分泌物')).toBeInTheDocument();
   });
 
   it('renders urinary and continence fields', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     expect(screen.getByText('排尿狀況')).toBeInTheDocument();
     expect(screen.getByText('肛門控制')).toBeInTheDocument();
     expect(screen.getByText('完全尿不出來')).toBeInTheDocument();
@@ -82,7 +87,7 @@ describe('SymptomReport Page', () => {
   });
 
   it('submit button is disabled when required fields are not selected', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     const submit = screen.getByText('提交回報');
     expect(submit).toBeDisabled();
   });
@@ -99,14 +104,14 @@ describe('SymptomReport Page', () => {
   };
 
   it('submit button becomes enabled after selecting all required fields', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     fillAllFields();
     const submit = screen.getByText('提交回報');
     expect(submit).not.toBeDisabled();
   });
 
   it('shows success overlay after submission in demo mode', async () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     fillAllFields();
     fireEvent.click(screen.getByText('提交回報'));
 
@@ -116,72 +121,72 @@ describe('SymptomReport Page', () => {
   });
 
   it('displays pain level text correctly', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     expect(screen.getByText('輕度疼痛')).toBeInTheDocument();
   });
 
   it('shows 無痛 for pain=0', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     const slider = screen.getByRole('slider');
     fireEvent.change(slider, { target: { value: '0' } });
     expect(screen.getByText('無痛')).toBeInTheDocument();
   });
 
   it('shows 中度疼痛 for pain=5', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     const slider = screen.getByRole('slider');
     fireEvent.change(slider, { target: { value: '5' } });
     expect(screen.getByText('中度疼痛')).toBeInTheDocument();
   });
 
   it('shows 嚴重疼痛 for pain=8', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     const slider = screen.getByRole('slider');
     fireEvent.change(slider, { target: { value: '8' } });
     expect(screen.getByText('嚴重疼痛')).toBeInTheDocument();
   });
 
   it('shows 劇烈疼痛 for pain=10', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     const slider = screen.getByRole('slider');
     fireEvent.change(slider, { target: { value: '10' } });
     expect(screen.getByText('劇烈疼痛')).toBeInTheDocument();
   });
 
   it('can toggle fever on', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     fireEvent.click(screen.getByText('是'));
     // Fever button should now be selected
   });
 
   it('wound: selecting 無異常 deselects others', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     fireEvent.click(screen.getByText('腫脹'));
     fireEvent.click(screen.getByText('無異常'));
     // 無異常 should be selected, 腫脹 should not
   });
 
   it('wound: selecting other item deselects 無異常', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     fireEvent.click(screen.getByText('無異常'));
     fireEvent.click(screen.getByText('腫脹'));
     // 無異常 should be deselected
   });
 
   it('wound: can toggle items on and off', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     fireEvent.click(screen.getByText('腫脹'));
     fireEvent.click(screen.getByText('腫脹')); // toggle off
   });
 
   it('shows "其他" text input when 其他 wound is selected', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     fireEvent.click(screen.getByText('其他'));
-    expect(screen.getByPlaceholderText('請描述傷口狀況...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('請描述傷口狀況…')).toBeInTheDocument();
   });
 
   it('submit disabled when 其他 wound selected but text empty', () => {
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     // Fill required fields except wound
     const bleedingBtn = screen.getByText('少量').closest('button');
     fireEvent.click(bleedingBtn);
@@ -202,7 +207,7 @@ describe('SymptomReport Page', () => {
       wound: '腫脹,其他:發紅', continence: '正常', urinary: '正常',
     });
 
-    render(<SymptomReport {...defaultProps} />);
+    render(<SymptomReport {...defaultProps} />, { wrapper: RouterWrapper });
     const slider = screen.getByRole('slider');
     expect(slider.value).toBe('7');
 
@@ -220,8 +225,8 @@ describe('SymptomReport Page', () => {
     it('shows loading state while fetching existing report', async () => {
       const sb = await import('../../utils/supabaseService');
       sb.getTodayReport.mockImplementation(() => new Promise(() => {})); // never resolves
-      render(<SymptomReport {...supabaseProps} />);
-      expect(screen.getByText('載入中...')).toBeInTheDocument();
+      render(<SymptomReport {...supabaseProps} />, { wrapper: RouterWrapper });
+      expect(screen.getByText('載入中…')).toBeInTheDocument();
       sb.getTodayReport.mockResolvedValue(null); // restore
     });
 
@@ -232,7 +237,7 @@ describe('SymptomReport Page', () => {
         wound: '無異常', continence: '正常', urinary: '正常',
       });
 
-      render(<SymptomReport {...supabaseProps} />);
+      render(<SymptomReport {...supabaseProps} />, { wrapper: RouterWrapper });
       await waitFor(() => {
         const slider = screen.getByRole('slider');
         expect(slider.value).toBe('6');
@@ -246,7 +251,7 @@ describe('SymptomReport Page', () => {
       sb.getTodayReport.mockResolvedValue(null);
       sb.saveReport.mockResolvedValue({});
 
-      render(<SymptomReport {...supabaseProps} />);
+      render(<SymptomReport {...supabaseProps} />, { wrapper: RouterWrapper });
       await waitFor(() => {
         expect(screen.getByText('提交回報')).toBeInTheDocument();
       });
@@ -265,7 +270,7 @@ describe('SymptomReport Page', () => {
       sb.saveReport.mockRejectedValue(new Error('Server error'));
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      render(<SymptomReport {...supabaseProps} />);
+      render(<SymptomReport {...supabaseProps} />, { wrapper: RouterWrapper });
       await waitFor(() => {
         expect(screen.getByText('提交回報')).toBeInTheDocument();
       });
@@ -285,10 +290,10 @@ describe('SymptomReport Page', () => {
       sb.getTodayReport.mockRejectedValue(new Error('Load fail'));
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      render(<SymptomReport {...supabaseProps} />);
+      render(<SymptomReport {...supabaseProps} />, { wrapper: RouterWrapper });
       await waitFor(() => {
         // Should still render the form after error
-        expect(screen.getByText('症狀回報')).toBeInTheDocument();
+        expect(screen.getByText(/症狀回報/)).toBeInTheDocument();
       });
 
       errorSpy.mockRestore();

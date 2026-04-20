@@ -50,17 +50,21 @@ describe('AIChat Page', () => {
     });
   });
 
+  const getSendBtn = () => {
+    const input = screen.getByPlaceholderText('輸入您的問題…');
+    const row = input.closest('.chat-input-row');
+    return row.querySelector('.chat-send');
+  };
+
   it('renders input field and send button', () => {
     render(<AIChat {...defaultProps} />);
-    expect(screen.getByPlaceholderText('輸入您的問題...')).toBeInTheDocument();
-    const sendBtn = screen.getByText('➤');
-    expect(sendBtn).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('輸入您的問題…')).toBeInTheDocument();
+    expect(getSendBtn()).toBeInTheDocument();
   });
 
   it('send button is disabled when input is empty', () => {
     render(<AIChat {...defaultProps} />);
-    const sendBtn = screen.getByText('➤');
-    expect(sendBtn).toBeDisabled();
+    expect(getSendBtn()).toBeDisabled();
   });
 
   it('sends a message when quick question button is clicked', async () => {
@@ -99,7 +103,7 @@ describe('AIChat Page', () => {
 
   it('sends message on Enter key press', async () => {
     render(<AIChat {...defaultProps} />);
-    const input = screen.getByPlaceholderText('輸入您的問題...');
+    const input = screen.getByPlaceholderText('輸入您的問題…');
     fireEvent.change(input, { target: { value: '術後飲食建議' } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
 
@@ -110,7 +114,7 @@ describe('AIChat Page', () => {
 
   it('does NOT send message on Shift+Enter', () => {
     render(<AIChat {...defaultProps} />);
-    const input = screen.getByPlaceholderText('輸入您的問題...');
+    const input = screen.getByPlaceholderText('輸入您的問題…');
     fireEvent.change(input, { target: { value: '多行文字' } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', shiftKey: true });
 
@@ -120,16 +124,15 @@ describe('AIChat Page', () => {
 
   it('does not send empty message', () => {
     render(<AIChat {...defaultProps} />);
-    const sendBtn = screen.getByText('➤');
-    fireEvent.click(sendBtn);
-    // No user bubble should appear (besides welcome)
+    const sendBtn = getSendBtn();
+    expect(sendBtn).toBeDisabled();
   });
 
   it('sends message via send button click', async () => {
     render(<AIChat {...defaultProps} />);
-    const input = screen.getByPlaceholderText('輸入您的問題...');
+    const input = screen.getByPlaceholderText('輸入您的問題…');
     fireEvent.change(input, { target: { value: '傷口怎麼照護？' } });
-    const sendBtn = screen.getByText('➤');
+    const sendBtn = getSendBtn();
     fireEvent.click(sendBtn);
 
     await waitFor(() => {
@@ -139,7 +142,7 @@ describe('AIChat Page', () => {
 
   it('clears input after sending', async () => {
     render(<AIChat {...defaultProps} />);
-    const input = screen.getByPlaceholderText('輸入您的問題...');
+    const input = screen.getByPlaceholderText('輸入您的問題…');
     fireEvent.change(input, { target: { value: '測試' } });
     fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
 
@@ -217,10 +220,10 @@ describe('AIChat Page', () => {
 
       render(<AIChat {...supabaseProps} />);
       await waitFor(() => {
-        expect(screen.getByPlaceholderText('輸入您的問題...')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('輸入您的問題…')).toBeInTheDocument();
       });
 
-      const input = screen.getByPlaceholderText('輸入您的問題...');
+      const input = screen.getByPlaceholderText('輸入您的問題…');
       fireEvent.change(input, { target: { value: '痛' } });
       fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
 
@@ -236,10 +239,10 @@ describe('AIChat Page', () => {
 
       render(<AIChat {...supabaseProps} />);
       await waitFor(() => {
-        expect(screen.getByPlaceholderText('輸入您的問題...')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('輸入您的問題…')).toBeInTheDocument();
       });
 
-      const input = screen.getByPlaceholderText('輸入您的問題...');
+      const input = screen.getByPlaceholderText('輸入您的問題…');
       fireEvent.change(input, { target: { value: '測試' } });
       fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
 
@@ -257,10 +260,10 @@ describe('AIChat Page', () => {
 
       render(<AIChat {...supabaseProps} />);
       await waitFor(() => {
-        expect(screen.getByPlaceholderText('輸入您的問題...')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('輸入您的問題…')).toBeInTheDocument();
       });
 
-      const input = screen.getByPlaceholderText('輸入您的問題...');
+      const input = screen.getByPlaceholderText('輸入您的問題…');
       fireEvent.change(input, { target: { value: 'test' } });
       fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
 
@@ -281,8 +284,7 @@ describe('AIChat Page', () => {
   it('shows source labels on AI messages', async () => {
     render(<AIChat {...defaultProps} />);
     await waitFor(() => {
-      // Welcome message should have label
-      const labels = screen.getAllByText(/自動回覆|AI 衛教助手/);
+      const labels = screen.getAllByText(/AI · (離線模式|Claude Haiku)/);
       expect(labels.length).toBeGreaterThan(0);
     });
   });

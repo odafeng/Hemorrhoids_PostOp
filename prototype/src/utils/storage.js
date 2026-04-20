@@ -35,19 +35,23 @@ export function getAllReports() {
 
 export function getTodayReport() {
   const today = new Date().toLocaleDateString('en-CA');
-  const reports = getAllReports();
-  return reports.find(r => r.date === today) || null;
+  return getReportByDate(today);
 }
 
-export function saveReport(report) {
+export function getReportByDate(reportDate) {
   const reports = getAllReports();
-  const today = new Date().toLocaleDateString('en-CA');
-  const existing = reports.findIndex(r => r.date === today);
-  
+  return reports.find(r => r.date === reportDate) || null;
+}
+
+export function saveReport(report, reportDate, pod) {
+  const reports = getAllReports();
+  const date = reportDate || new Date().toLocaleDateString('en-CA');
+  const existing = reports.findIndex(r => r.date === date);
+
   const fullReport = {
     ...report,
-    date: today,
-    pod: getPOD(),
+    date,
+    pod: pod != null ? pod : getPOD(),
     timestamp: new Date().toISOString(),
   };
 

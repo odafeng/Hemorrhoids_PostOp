@@ -57,6 +57,7 @@ describe('errorLogger', () => {
     it('initializes with DSN when configured', async () => {
       vi.resetModules();
       vi.stubEnv('VITE_SENTRY_DSN', 'https://test@sentry.io/123');
+      vi.stubEnv('DEV', false); // beforeSend filters dev mode; simulate prod
       const mod = await import('../errorLogger');
       mod.initSentry();
       const Sentry = await import('@sentry/react');

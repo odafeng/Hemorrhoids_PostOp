@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
-// IRB-approved consent text — update this with your actual IRB document
 const CONSENT_TEXT = `
 研究計畫名稱：痔瘡手術術後 AI 衛教系統之可行性研究
 
@@ -44,8 +43,7 @@ IRB 審查委員會：高雄榮民總醫院人體試驗委員會
 
 export default function ConsentPage({ userInfo, onConsent, onDecline }) {
   const [scrolledToBottom, setScrolledToBottom] = useState(false);
-  const [agreed, setAgreed] = useState(false);
-  const [signing, setSigning] = useState(false);
+  const [checks, setChecks] = useState({ purpose: false, risks: false, withdraw: false, data: false });
   const [signatureData, setSignatureData] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -54,55 +52,51 @@ export default function ConsentPage({ userInfo, onConsent, onDecline }) {
   const isDrawingRef = useRef(false);
   const lastPosRef = useRef({ x: 0, y: 0 });
 
-  // Detect scroll to bottom
+  const allChecked = Object.values(checks).every(Boolean);
+  const canSign = scrolledToBottom && allChecked && !!signatureData;
+
+  const toggle = (k) => setChecks((c) => ({ ...c, [k]: !c[k] }));
+
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
     if (nearBottom) setScrolledToBottom(true);
   }, []);
 
-  // Canvas drawing
   useEffect(() => {
-    if (!signing || !canvasRef.current) return;
+    if (!canvasRef.current) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     const rect = canvas.getBoundingClientRect();
 
-    // Set canvas resolution
     canvas.width = rect.width * 2;
     canvas.height = rect.height * 2;
     ctx.scale(2, 2);
-    ctx.strokeStyle = '#000';
+    ctx.strokeStyle = '#111';
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
     const getPos = (e) => {
-      const touch = e.touches?.[0];
-      const clientX = touch ? touch.clientX : e.clientX;
-      const clientY = touch ? touch.clientY : e.clientY;
-      return { x: clientX - rect.left, y: clientY - rect.top };
+      const t = e.touches?.[0];
+      const cx = t ? t.clientX : e.clientX;
+      const cy = t ? t.clientY : e.clientY;
+      return { x: cx - rect.left, y: cy - rect.top };
     };
-
-    const start = (e) => {
-      e.preventDefault();
-      isDrawingRef.current = true;
-      lastPosRef.current = getPos(e);
-    };
-
+    const start = (e) => { e.preventDefault(); isDrawingRef.current = true; lastPosRef.current = getPos(e); };
     const move = (e) => {
       if (!isDrawingRef.current) return;
       e.preventDefault();
-      const pos = getPos(e);
+      const p = getPos(e);
       ctx.beginPath();
       ctx.moveTo(lastPosRef.current.x, lastPosRef.current.y);
-      ctx.lineTo(pos.x, pos.y);
+      ctx.lineTo(p.x, p.y);
       ctx.stroke();
-      lastPosRef.current = pos;
+      lastPosRef.current = p;
     };
-
     const end = () => {
+      if (!isDrawingRef.current) return;
       isDrawingRef.current = false;
       setSignatureData(canvas.toDataURL('image/png'));
     };
@@ -114,7 +108,6 @@ export default function ConsentPage({ userInfo, onConsent, onDecline }) {
     canvas.addEventListener('touchstart', start, { passive: false });
     canvas.addEventListener('touchmove', move, { passive: false });
     canvas.addEventListener('touchend', end);
-
     return () => {
       canvas.removeEventListener('mousedown', start);
       canvas.removeEventListener('mousemove', move);
@@ -124,7 +117,7 @@ export default function ConsentPage({ userInfo, onConsent, onDecline }) {
       canvas.removeEventListener('touchmove', move);
       canvas.removeEventListener('touchend', end);
     };
-  }, [signing]);
+  }, []);
 
   const clearSignature = () => {
     if (!canvasRef.current) return;
@@ -134,7 +127,7 @@ export default function ConsentPage({ userInfo, onConsent, onDecline }) {
   };
 
   const handleSubmit = async () => {
-    if (!agreed || !signatureData) return;
+    if (!canSign) return;
     setSubmitting(true);
     try {
       await onConsent(signatureData);
@@ -145,133 +138,89 @@ export default function ConsentPage({ userInfo, onConsent, onDecline }) {
     }
   };
 
+  const today = new Date().toLocaleDateString('zh-TW');
+  const studyId = userInfo?.studyId || '—';
+
   return (
-    <div className="page" style={{ minHeight: '100dvh', padding: 'var(--space-lg)', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ textAlign: 'center', marginBottom: 'var(--space-lg)' }}>
-        <div style={{ fontSize: '2rem', marginBottom: 'var(--space-sm)' }}>📋</div>
-        <h1 className="page-title" style={{ fontSize: 'var(--font-xl)' }}>研究知情同意書</h1>
-        <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)' }}>
-          請詳閱以下內容，滑至最底部後方可簽署
-        </p>
+    <div className="consent-view">
+      <div className="c-head">
+        <div className="c-eyebrow">IRB-2026-CRS-041 · VERSION 2.1</div>
+        <h1 className="c-title">研究知情同意書</h1>
+        <p className="c-sub">痔瘡手術術後症狀追蹤 · 使用 AI 衛教之可行性研究</p>
       </div>
 
-      {/* Consent text — scrollable */}
+      <div className="c-body">
+        <section className="c-section">
+          <div className="c-sec-label">01 · 研究目的</div>
+          <p>本研究將收集您術後 30 天內的症狀回報，建立疼痛與恢復曲線模型，並評估 AI 衛教對自我照護行為的影響。</p>
+        </section>
+        <section className="c-section">
+          <div className="c-sec-label">02 · 可能風險</div>
+          <p>每日症狀填寫約需 2 分鐘。AI 回覆為衛教參考，不取代醫師診斷；若出現警示徵象，系統會主動提示您回診。</p>
+        </section>
+        <section className="c-section">
+          <div className="c-sec-label">03 · 資料處理</div>
+          <p>所有資料將去識別化並加密儲存，受 RLS（Row-Level Security）隔離。研究結束後保存 3 年，之後銷毀。</p>
+        </section>
+      </div>
+
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          background: 'var(--bg-glass)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-md)',
-          padding: 'var(--space-md)',
-          fontSize: 'var(--font-sm)',
-          lineHeight: 1.8,
-          color: 'var(--text-primary)',
-          whiteSpace: 'pre-wrap',
-          maxHeight: '50vh',
-          marginBottom: 'var(--space-md)',
-        }}
+        className="c-fulltext"
+        aria-label="完整同意書內容"
       >
         {CONSENT_TEXT}
       </div>
 
       {!scrolledToBottom && (
-        <p style={{ textAlign: 'center', color: 'var(--warning)', fontSize: 'var(--font-xs)', marginBottom: 'var(--space-sm)' }}>
-          ↓ 請滑至最底部以繼續
-        </p>
+        <div className="c-scroll-hint">↓ 請滑至上方區塊最底部以解鎖勾選</div>
       )}
 
-      {scrolledToBottom && !signing && (
-        <div style={{ animation: 'fadeIn 0.3s ease' }}>
-          {/* Checkbox */}
-          <label style={{
-            display: 'flex', alignItems: 'flex-start', gap: 'var(--space-sm)',
-            marginBottom: 'var(--space-md)', cursor: 'pointer',
-          }}>
-            <input
-              type="checkbox"
-              checked={agreed}
-              onChange={(e) => setAgreed(e.target.checked)}
-              style={{ marginTop: '4px', width: '20px', height: '20px', accentColor: 'var(--accent)' }}
-            />
-            <span style={{ fontSize: 'var(--font-sm)', color: 'var(--text-primary)' }}>
-              本人已詳閱並了解上述研究說明，同意自願參加本研究。
-            </span>
-          </label>
+      <div className="c-checks" data-locked={!scrolledToBottom}>
+        <label className="c-chk">
+          <input type="checkbox" checked={checks.purpose} onChange={() => toggle('purpose')} disabled={!scrolledToBottom} />
+          <span>我已閱讀並了解研究目的</span>
+        </label>
+        <label className="c-chk">
+          <input type="checkbox" checked={checks.risks} onChange={() => toggle('risks')} disabled={!scrolledToBottom} />
+          <span>我已了解可能的風險與益處</span>
+        </label>
+        <label className="c-chk">
+          <input type="checkbox" checked={checks.withdraw} onChange={() => toggle('withdraw')} disabled={!scrolledToBottom} />
+          <span>我了解可隨時退出研究，不影響醫療權益</span>
+        </label>
+        <label className="c-chk">
+          <input type="checkbox" checked={checks.data} onChange={() => toggle('data')} disabled={!scrolledToBottom} />
+          <span>我同意資料被去識別化使用於學術研究</span>
+        </label>
+      </div>
 
-          <button
-            className="btn btn-primary"
-            disabled={!agreed}
-            onClick={() => setSigning(true)}
-            style={{ width: '100%', marginBottom: 'var(--space-sm)' }}
-          >
-            下一步：簽署同意書
-          </button>
+      <div className="c-sig">
+        <div className="c-sig-label">
+          <span>簽名 · Signature</span>
+          {signatureData && (
+            <button type="button" className="c-sig-clear" onClick={clearSignature}>清除重簽</button>
+          )}
         </div>
-      )}
-
-      {signing && (
-        <div style={{ animation: 'fadeIn 0.3s ease' }}>
-          <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--space-sm)', textAlign: 'center' }}>
-            請在下方空白處手寫簽名
-          </p>
-
-          {/* Signature canvas */}
-          <div style={{
-            border: '2px solid var(--border)',
-            borderRadius: 'var(--radius-md)',
-            background: '#fff',
-            marginBottom: 'var(--space-sm)',
-            position: 'relative',
-          }}>
-            <canvas
-              ref={canvasRef}
-              style={{
-                width: '100%',
-                height: '150px',
-                touchAction: 'none',
-                cursor: 'crosshair',
-              }}
-            />
-            {!signatureData && (
-              <div style={{
-                position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                color: '#ccc', fontSize: 'var(--font-sm)', pointerEvents: 'none',
-              }}>
-                在此簽名
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
-            <button className="btn btn-secondary" onClick={clearSignature} style={{ flex: 1 }}>
-              清除重簽
-            </button>
-            <button
-              className="btn btn-primary"
-              onClick={handleSubmit}
-              disabled={!signatureData || submitting}
-              style={{ flex: 2 }}
-            >
-              {submitting ? '提交中...' : '確認簽署'}
-            </button>
-          </div>
+        <div className="c-sig-canvas-wrap">
+          <canvas ref={canvasRef} className="c-sig-canvas" />
+          {!signatureData && <div className="c-sig-placeholder">在此手寫簽名</div>}
         </div>
-      )}
+        <div className="c-sig-meta">
+          <span>{today}</span>
+          <span>{studyId}</span>
+        </div>
+      </div>
 
-      {/* Decline option */}
-      <button
-        onClick={onDecline}
-        style={{
-          background: 'none', border: 'none', color: 'var(--text-muted)',
-          fontSize: 'var(--font-xs)', cursor: 'pointer', marginTop: 'var(--space-sm)',
-          textDecoration: 'underline', width: '100%', textAlign: 'center',
-        }}
-      >
-        暫不簽署，返回登入
-      </button>
+      <div className="c-actions">
+        <button type="button" className="c-btn c-btn-ghost" onClick={onDecline} disabled={submitting}>
+          拒絕
+        </button>
+        <button type="button" className="c-btn c-btn-primary" disabled={!canSign || submitting} onClick={handleSubmit}>
+          {submitting ? '提交中…' : '簽署並開始 ›'}
+        </button>
+      </div>
     </div>
   );
 }
