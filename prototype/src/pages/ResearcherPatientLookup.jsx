@@ -14,11 +14,33 @@ export default function ResearcherPatientLookup({ onNavigate, isDemo }) {
   const [resetMsg, setResetMsg] = useState('');
   const [showResetPwd, setShowResetPwd] = useState(false);
 
+  // Signature viewing state
+  const [sigUrl, setSigUrl] = useState(null);
+  const [sigLoading, setSigLoading] = useState(false);
+  const [sigError, setSigError] = useState('');
+
+  const handleViewSignature = async () => {
+    setSigError(''); setSigUrl(null);
+    if (!result?.patient?.consent_signature_url) return;
+    setSigLoading(true);
+    try {
+      const url = await sb.getSignedSignatureUrl(result.patient.consent_signature_url, 300);
+      if (!url) throw new Error('無法取得簽名連結');
+      setSigUrl(url);
+    } catch (err) {
+      setSigError(err.message || '載入失敗');
+    } finally {
+      setSigLoading(false);
+    }
+  };
+
+  const closeSignature = () => { setSigUrl(null); setSigError(''); };
+
   const handleLookup = async (e) => {
     e.preventDefault();
     const studyId = query.trim();
     if (!studyId) return;
-    setLoading(true); setError(''); setResult(null);
+    setLoading(true); setError(''); setResult(null); setSigUrl(null); setSigError('');
     try {
       if (isDemo) {
         setResult({ demo: true, studyId });
@@ -145,7 +167,82 @@ export default function ResearcherPatientLookup({ onNavigate, isDemo }) {
                 </div>
               </div>
             )}
+
+            {/* Consent signature */}
+            {result.patientExists && result.patient?.consent_signed && (
+              <div style={{
+                marginTop: 14, paddingTop: 12,
+                borderTop: '1px solid var(--line)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+              }}>
+                <div>
+                  <div className="case-k">Consent Signature</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-2)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                    簽署：{result.patient.consent_date ? new Date(result.patient.consent_date).toLocaleDateString('zh-TW') : '—'}
+                  </div>
+                </div>
+                {result.patient.consent_signature_url ? (
+                  <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 14px' }}
+                    onClick={handleViewSignature} disabled={sigLoading}>
+                    {sigLoading ? '載入中…' : <><I.Eye width={14} height={14} /> 檢視簽名</>}
+                  </button>
+                ) : (
+                  <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)' }}>
+                    （無簽名檔）
+                  </span>
+                )}
+              </div>
+            )}
           </div>
+
+          {sigError && (
+            <div className="alert-banner danger" style={{ marginTop: 10 }}>
+              <div className="al-icon"><I.Alert width={18} height={18} /></div>
+              <div><div className="al-msg">{sigError}</div></div>
+            </div>
+          )}
+
+          {/* Signature modal */}
+          {sigUrl && (
+            <div
+              onClick={closeSignature}
+              style={{
+                position: 'fixed', inset: 0, zIndex: 200,
+                background: 'rgba(0,0,0,0.72)',
+                display: 'grid', placeItems: 'center',
+                padding: 20, animation: 'fadeIn 0.2s ease',
+              }}>
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  maxWidth: '92vw', maxHeight: '92vh',
+                  background: 'var(--surface)', border: '1px solid var(--line)',
+                  borderRadius: 14, padding: 20,
+                  display: 'flex', flexDirection: 'column', gap: 12,
+                }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div className="card-kicker">Signature · {result.studyId}</div>
+                    <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                      連結 5 分鐘後過期
+                    </div>
+                  </div>
+                  <button type="button" className="icon-btn" onClick={closeSignature} aria-label="關閉">
+                    <I.Close width={16} height={16} />
+                  </button>
+                </div>
+                <img
+                  src={sigUrl}
+                  alt={`${result.studyId} consent signature`}
+                  style={{
+                    background: '#fff', borderRadius: 8,
+                    maxWidth: '100%', maxHeight: '70vh',
+                    objectFit: 'contain', border: '1px solid var(--line)',
+                  }}
+                />
+              </div>
+            </div>
+          )}
 
           {result.alertDetails?.length > 0 && (
             <>

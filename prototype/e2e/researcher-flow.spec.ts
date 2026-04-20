@@ -9,71 +9,51 @@ test.describe('Researcher — Dashboard & Tools', () => {
   test.skip(!email || !password, 'E2E_RESEARCHER_EMAIL / E2E_RESEARCHER_PASSWORD not set');
 
   test.beforeEach(async ({ page }) => {
-    page.on('console', msg => {
+    page.on('console', (msg) => {
       if (msg.type() === 'error') console.log('[BROWSER ERROR]', msg.text());
     });
 
     await page.goto('/');
-    await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10_000 });
     await page.getByPlaceholder('your@email.com').fill(email);
     await page.getByPlaceholder('••••••••').fill(password);
-    await page.locator('form').getByRole('button', { name: '登入' }).click();
+    await page.locator('form button[type="submit"]').click();
 
-    // Researcher should land on researcher dashboard (not patient dashboard)
-    await expect(page.getByText('研究者儀表板')).toBeVisible({ timeout: 20000 });
+    await expect(page.getByText(/研究者儀表板/)).toBeVisible({ timeout: 20_000 });
   });
 
-  test('Dashboard shows stats, patient table, and alerts', async ({ page }) => {
-    // Stats grid
-    await expect(page.getByText('收案人數')).toBeVisible();
-    await expect(page.getByText('平均依從率')).toBeVisible();
-    await expect(page.getByText('活躍警示')).toBeVisible();
-    await expect(page.getByText('待審核 AI')).toBeVisible();
+  test('Dashboard shows stats, cohort list, and export section', async ({ page }) => {
+    await expect(page.getByText('ENROLLED')).toBeVisible();
+    await expect(page.getByText('ADHERENCE')).toBeVisible();
+    await expect(page.getByText('ALERTS')).toBeVisible();
+    await expect(page.getByText('PENDING AI')).toBeVisible();
 
-    // Patient table
-    await expect(page.getByText('病人列表')).toBeVisible();
-    await expect(page.getByText('Study ID')).toBeVisible();
+    await expect(page.getByText(/COHORT ·/)).toBeVisible();
 
-    // Export buttons
-    await expect(page.getByRole('button', { name: /症狀回報 CSV/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /症狀回報/ })).toBeVisible();
 
-    // Logout button
-    await expect(page.getByRole('button', { name: '登出' })).toBeVisible();
+    await expect(page.getByLabel('登出')).toBeVisible();
   });
 
   test('Patient lookup — search by study ID', async ({ page }) => {
-    // Navigate to lookup
     await page.locator('nav.bottom-nav').getByText('查詢').click();
-    await expect(page.getByText('病人查詢')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('病人查詢')).toBeVisible({ timeout: 10_000 });
 
-    // Search for the test patient
-    await page.getByPlaceholder(/Study ID/).fill('TEST-002');
-    await page.getByRole('button', { name: '查詢' }).click();
+    await page.locator('.search-box input').fill('TEST-002');
+    await page.getByRole('button', { name: /查詢/ }).click();
 
-    // Should show patient info
-    await expect(page.getByText('TEST-002')).toBeVisible({ timeout: 10000 });
-    // Should show patient info or not found
-    await expect(page.getByText(/Surgery date|NOT FOUND/)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('TEST-002')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Surgery Date|未建檔/)).toBeVisible({ timeout: 10_000 });
   });
 
   test('Chat review page loads and shows review UI', async ({ page }) => {
-    // Navigate to review
     await page.locator('nav.bottom-nav').getByText('審核').click();
-    await expect(page.getByText('AI 回覆審核')).toBeVisible({ timeout: 10000 });
-
-    // Should show either unreviewed chats or "all reviewed" message
-    await expect(page.getByText(/待審核|所有 AI 回覆皆已審核完畢/)).toBeVisible();
-
-    // If there are unreviewed chats, batch button should be visible
-    const batchBtn = page.getByRole('button', { name: /批次審核全部/ });
-    const allReviewed = page.getByText('所有 AI 回覆皆已審核完畢');
-
-    // One of these should be visible
-    await expect(batchBtn.or(allReviewed)).toBeVisible();
+    await expect(page.getByText('AI 回覆審核')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/待審核|所有 AI 回覆皆已審核完畢|尚無 AI 回覆紀錄/)).toBeVisible();
   });
 
   test('Logout works', async ({ page }) => {
-    await page.getByRole('button', { name: '登出' }).click();
-    await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10000 });
+    await page.getByLabel('登出').click();
+    await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10_000 });
   });
 });

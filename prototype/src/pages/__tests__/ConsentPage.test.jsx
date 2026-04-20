@@ -55,9 +55,10 @@ describe('ConsentPage', () => {
 
   it('renders consent title and IRB eyebrow', () => {
     renderPage();
-    expect(screen.getByText('研究知情同意書')).toBeInTheDocument();
-    expect(screen.getByText(/IRB-2026-CRS-041/)).toBeInTheDocument();
-    expect(screen.getByText(/痔瘡手術術後 AI 衛教系統之可行性研究/)).toBeInTheDocument();
+    expect(screen.getByText('受試者同意書')).toBeInTheDocument();
+    expect(screen.getByText(/VGHKS · IRB/)).toBeInTheDocument();
+    // Phrase appears in both summary sub + fulltext; getAllByText returns ≥1
+    expect(screen.getAllByText(/結合人工智慧衛教之痔瘡術後數位症狀監測系統/).length).toBeGreaterThan(0);
   });
 
   it('shows scroll hint initially; checkboxes are disabled', () => {

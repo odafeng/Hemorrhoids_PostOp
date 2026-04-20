@@ -11,14 +11,18 @@ export function useAuth() {
   const [loadingTooLong, setLoadingTooLong] = useState(false);
 
   const loadUserInfo = async (session) => {
+    const id = session?.user?.id || null;
+    const email = session?.user?.email || null;
     const studyId = session?.user?.user_metadata?.study_id;
     const role = session?.user?.user_metadata?.role || 'patient';
     const surgeryDate = session?.user?.user_metadata?.surgery_date || null;
 
-    console.info('[loadUserInfo]', { studyId, role, surgeryDate });
+    console.info('[loadUserInfo]', { id, studyId, role, surgeryDate });
 
     if (studyId) {
       setUserInfo({
+        id,
+        email,
         studyId,
         role,
         surgeryDate,

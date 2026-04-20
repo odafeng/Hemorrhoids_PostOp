@@ -144,6 +144,46 @@ export async function inviteResearcher(email, displayName, role = 'researcher') 
   return result;
 }
 
+/**
+ * PI-only: list all researchers and PIs.
+ * Returns [{ id, email, display_name, role, invited_at, created_at, last_sign_in_at, banned_until }]
+ */
+export async function listResearchers() {
+  return await callResearcherManage({ action: 'list' }).then(r => r.users || []);
+}
+
+/**
+ * PI-only: ban a researcher/PI user (disable their login).
+ */
+export async function banResearcher(userId) {
+  return await callResearcherManage({ action: 'ban', user_id: userId });
+}
+
+/**
+ * PI-only: unban (re-enable) a researcher/PI user.
+ */
+export async function unbanResearcher(userId) {
+  return await callResearcherManage({ action: 'unban', user_id: userId });
+}
+
+async function callResearcherManage(body) {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('未登入');
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/researcher-manage`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const result = await resp.json();
+  if (!resp.ok) throw new Error(result.error || `管理失敗 (${resp.status})`);
+  return result;
+}
+
 // =====================
 // Invite management (researcher-only)
 // =====================

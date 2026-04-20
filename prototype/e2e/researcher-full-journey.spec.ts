@@ -1,264 +1,154 @@
 // E2E: Complete Researcher User Journey (Demo Mode)
-// Covers every button and researcher path
-// No Supabase needed — uses researcher demo mode
+// Exercises every researcher path without hitting Supabase.
 import { test, expect } from '@playwright/test';
 
 test.describe('Researcher Full Journey — Demo Mode', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10000 });
-    await page.getByRole('button', { name: /研究者 Demo/ }).click();
-    await expect(page.getByText('研究者儀表板')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10_000 });
+    // Switch role toggle to 研究人員 first, then click Demo
+    await page.locator('.role-toggle button').filter({ hasText: '研究人員' }).click();
+    await page.getByRole('button', { name: /Demo 模式/ }).click();
+    await expect(page.getByText(/研究者儀表板/)).toBeVisible({ timeout: 10_000 });
   });
 
-  // =====================
-  // PATH 1: Researcher Dashboard overview
-  // =====================
   test('Dashboard displays all key stats', async ({ page }) => {
-    // Stats cards
-    await expect(page.getByText('收案人數')).toBeVisible();
-    await expect(page.getByText('平均依從率')).toBeVisible();
-    await expect(page.getByText('活躍警示')).toBeVisible();
-    await expect(page.getByText('待審核 AI')).toBeVisible();
-
-    // Patient list table
-    await expect(page.getByText('病人列表')).toBeVisible();
-    await expect(page.getByText('Study ID')).toBeVisible();
-
-    // Export section
+    await expect(page.getByText('ENROLLED')).toBeVisible();
+    await expect(page.getByText('ADHERENCE')).toBeVisible();
+    await expect(page.getByText('ALERTS')).toBeVisible();
+    await expect(page.getByText('PENDING AI')).toBeVisible();
+    await expect(page.getByText(/COHORT ·/)).toBeVisible();
     await expect(page.getByText('資料匯出')).toBeVisible();
-
-    // Logout button
-    await expect(page.getByRole('button', { name: '登出' })).toBeVisible();
+    await expect(page.getByLabel('登出')).toBeVisible();
   });
 
-  // =====================
-  // PATH 2: Patient list shows mock data
-  // =====================
-  test('Patient list shows mock patients', async ({ page }) => {
-    // Should show at least some patient IDs
-    await expect(page.getByText('HEM-001').first()).toBeVisible({ timeout: 5000 });
+  test('Cohort list shows mock patients', async ({ page }) => {
+    await expect(page.locator('.cohort-row').first()).toBeVisible({ timeout: 5_000 });
   });
 
-  // =====================
-  // PATH 3: CSV Export
-  // =====================
-  test('CSV export button triggers download', async ({ page }) => {
-    const downloadPromise = page.waitForEvent('download').catch(() => null);
-    await page.getByRole('button', { name: /症狀回報 CSV/ }).click();
-
-    // In demo mode, it may create a blob download or show an alert
-    // Just verify it doesn't crash
-    await page.waitForTimeout(1000);
+  test('CSV export — symptom reports', async ({ page }) => {
+    await page.getByRole('button', { name: /症狀回報/ }).click();
+    await page.waitForTimeout(800);
   });
 
-  test('Export alerts CSV button works', async ({ page }) => {
-    const downloadPromise = page.waitForEvent('download').catch(() => null);
-    await page.getByRole('button', { name: /警示紀錄 CSV/ }).click();
-    await page.waitForTimeout(1000);
+  test('CSV export — alerts', async ({ page }) => {
+    await page.getByRole('button', { name: /警示紀錄/ }).click();
+    await page.waitForTimeout(800);
   });
 
-  test('Export AI chat logs CSV button works', async ({ page }) => {
-    const downloadPromise = page.waitForEvent('download').catch(() => null);
-    await page.getByRole('button', { name: /AI 對話紀錄 CSV/ }).click();
-    await page.waitForTimeout(1000);
+  test('CSV export — AI chat logs', async ({ page }) => {
+    await page.getByRole('button', { name: /AI 對話紀錄/ }).click();
+    await page.waitForTimeout(800);
   });
 
-  test('Full data backup JSON button works', async ({ page }) => {
-    const downloadPromise = page.waitForEvent('download').catch(() => null);
+  test('Full JSON backup', async ({ page }) => {
     await page.getByRole('button', { name: /全量資料備份/ }).click();
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(800);
   });
 
-  // =====================
-  // PATH 4: Alert cards with acknowledge
-  // =====================
-  test('Alerts section shows unacknowledged alerts', async ({ page }) => {
-    // Mock data has 1 unacknowledged alert (HEM-003 bowel warning)
-    const alertSection = page.locator('.alert-banner, [class*="alert"]');
-    // May or may not be visible depending on data
-    // Just verify the page renders without error
-    await expect(page.getByText('研究者儀表板')).toBeVisible();
-  });
-
-  // =====================
-  // PATH 5: Dashboard → Patient Lookup page
-  // =====================
   test('Navigate to Patient Lookup and search', async ({ page }) => {
     await page.locator('nav.bottom-nav').getByText('查詢').click();
-    await expect(page.getByText('病人查詢')).toBeVisible({ timeout: 5000 });
-
-    // Search input should be visible
-    const searchInput = page.locator('input[placeholder*="Study"], input[placeholder*="study"], input[type="text"]').first();
+    await expect(page.getByText('病人查詢')).toBeVisible({ timeout: 5_000 });
+    const searchInput = page.locator('.search-box input');
     await expect(searchInput).toBeVisible();
-
-    // Search for a known patient
     await searchInput.fill('HEM-001');
-    // Find and click the search/query button
-    const searchBtn = page.getByRole('button', { name: /查詢|搜尋/ });
-    if (await searchBtn.isVisible().catch(() => false)) {
-      await searchBtn.click();
-    }
-
-    // Should show patient info
-    await page.waitForTimeout(2000);
+    await page.getByRole('button', { name: /查詢/ }).click();
+    await page.waitForTimeout(1_500);
   });
 
-  // =====================
-  // PATH 6: Patient Lookup — search for non-existent patient
-  // =====================
-  test('Patient Lookup shows not found for invalid ID', async ({ page }) => {
+  test('Patient Lookup — not-found ID in demo returns placeholder', async ({ page }) => {
     await page.locator('nav.bottom-nav').getByText('查詢').click();
-    await expect(page.getByText('病人查詢')).toBeVisible({ timeout: 5000 });
-
-    const searchInput = page.locator('input[placeholder*="Study"], input[placeholder*="study"], input[type="text"]').first();
-    await searchInput.fill('NONEXIST-999');
-    const searchBtn = page.getByRole('button', { name: /查詢|搜尋/ });
-    if (await searchBtn.isVisible().catch(() => false)) {
-      await searchBtn.click();
-    }
-    await page.waitForTimeout(2000);
+    await expect(page.getByText('病人查詢')).toBeVisible({ timeout: 5_000 });
+    await page.locator('.search-box input').fill('NONEXIST-999');
+    await page.getByRole('button', { name: /查詢/ }).click();
+    await expect(page.getByText(/Demo 模式不支援/)).toBeVisible({ timeout: 5_000 });
   });
 
-  // =====================
-  // PATH 7: Patient Lookup — view patient details
-  // =====================
-  test('Patient Lookup shows detailed patient info', async ({ page }) => {
-    await page.locator('nav.bottom-nav').getByText('查詢').click();
-    await expect(page.getByText('病人查詢')).toBeVisible({ timeout: 5000 });
-
-    const searchInput = page.locator('input[placeholder*="Study"], input[placeholder*="study"], input[type="text"]').first();
-    await searchInput.fill('HEM-003');
-    const searchBtn = page.getByRole('button', { name: /查詢|搜尋/ });
-    if (await searchBtn.isVisible().catch(() => false)) {
-      await searchBtn.click();
-    }
-    await page.waitForTimeout(2000);
-  });
-
-  // =====================
-  // PATH 8: Dashboard → Chat Review page
-  // =====================
   test('Navigate to Chat Review', async ({ page }) => {
     await page.locator('nav.bottom-nav').getByText('審核').click();
-    await expect(page.getByText('AI 回覆審核')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('AI 回覆審核')).toBeVisible({ timeout: 5_000 });
   });
 
-  // =====================
-  // PATH 9: Chat Review — shows chat logs
-  // =====================
-  test('Chat Review shows review content', async ({ page }) => {
+  test('Chat Review individual correct action', async ({ page }) => {
     await page.locator('nav.bottom-nav').getByText('審核').click();
-    await expect(page.getByText('AI 回覆審核')).toBeVisible({ timeout: 5000 });
-
-    // Page should have loaded with some content — just verify no crash
-    await page.waitForTimeout(2000);
-    await expect(page.getByText('AI 回覆審核')).toBeVisible();
-  });
-
-  // =====================
-  // PATH 10: Chat Review — individual review
-  // =====================
-  test('Chat Review allows reviewing individual chats', async ({ page }) => {
-    await page.locator('nav.bottom-nav').getByText('審核').click();
-    await expect(page.getByText('AI 回覆審核')).toBeVisible({ timeout: 5000 });
-
-    // If there are review buttons, click one
-    const correctBtn = page.getByRole('button', { name: /正確|Correct|通過/ }).first();
-    if (await correctBtn.isVisible().catch(() => false)) {
-      await correctBtn.click();
-      // Verify the review was recorded
-      await page.waitForTimeout(1000);
+    await expect(page.getByText('AI 回覆審核')).toBeVisible({ timeout: 5_000 });
+    const reviewBtn = page.getByRole('button', { name: /審核此則/ }).first();
+    if (await reviewBtn.isVisible().catch(() => false)) {
+      await reviewBtn.click();
+      const correctBtn = page.getByRole('button', { name: /^✓ 正確$/ }).first();
+      if (await correctBtn.isVisible().catch(() => false)) {
+        await correctBtn.click();
+        await page.waitForTimeout(500);
+      }
     }
   });
 
-  // =====================
-  // PATH 11: Chat Review — batch review
-  // =====================
-  test('Chat Review batch review button', async ({ page }) => {
+  test('Chat Review batch review prompt', async ({ page }) => {
     await page.locator('nav.bottom-nav').getByText('審核').click();
-    await expect(page.getByText('AI 回覆審核')).toBeVisible({ timeout: 5000 });
-
-    const batchBtn = page.getByRole('button', { name: /批次審核全部|批次/ });
+    await expect(page.getByText('AI 回覆審核')).toBeVisible({ timeout: 5_000 });
+    const batchBtn = page.getByRole('button', { name: /批次審核全部/ });
     if (await batchBtn.isVisible().catch(() => false)) {
       await batchBtn.click();
-      await page.waitForTimeout(2000);
+      await expect(page.getByText(/將.*則未審核/)).toBeVisible({ timeout: 3_000 });
     }
   });
 
-  // =====================
-  // PATH 12: Bottom nav — all researcher tabs
-  // =====================
   test('Bottom nav tabs navigate to all researcher pages', async ({ page }) => {
-    // 查詢
     await page.locator('nav.bottom-nav').getByText('查詢').click();
-    await expect(page.getByText('病人查詢')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('病人查詢')).toBeVisible({ timeout: 5_000 });
 
-    // 審核
     await page.locator('nav.bottom-nav').getByText('審核').click();
-    await expect(page.getByText('AI 回覆審核')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('AI 回覆審核')).toBeVisible({ timeout: 5_000 });
 
-    // 概覽 (back to dashboard)
     await page.locator('nav.bottom-nav').getByText('概覽').click();
-    await expect(page.getByText('研究者儀表板')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/研究者儀表板/)).toBeVisible({ timeout: 5_000 });
   });
 
-  // =====================
-  // PATH 13: Logout
-  // =====================
   test('Logout returns to login page', async ({ page }) => {
-    await page.getByRole('button', { name: '登出' }).click();
-    await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 5000 });
+    await page.getByLabel('登出').click();
+    await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 5_000 });
     await expect(page.getByPlaceholder('your@email.com')).toBeVisible();
   });
 });
 
-// =====================
-// Auth Mode — Real Supabase Researcher
-// =====================
+// Real-Supabase researcher auth
 test.describe('Researcher Registration & Auth', () => {
   const email = process.env.E2E_RESEARCHER_EMAIL || '';
   const password = process.env.E2E_RESEARCHER_PASSWORD || '';
 
   test.skip(!email || !password, 'E2E_RESEARCHER_EMAIL / E2E_RESEARCHER_PASSWORD not set');
 
-  test('Researcher can login and access dashboard', async ({ page }) => {
+  test('Researcher login lands on researcher dashboard', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10_000 });
 
     await page.getByPlaceholder('your@email.com').fill(email);
     await page.getByPlaceholder('••••••••').fill(password);
-    await page.locator('form').getByRole('button', { name: '登入' }).click();
+    await page.locator('form button[type="submit"]').click();
 
-    // Should land on researcher dashboard
-    await expect(page.getByText('研究者儀表板')).toBeVisible({ timeout: 20000 });
+    await expect(page.getByText(/研究者儀表板/)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText('ENROLLED')).toBeVisible();
   });
 
-  test('Researcher can navigate all pages with real data', async ({ page }) => {
-    // Login
+  test('Researcher navigates all pages with real data', async ({ page }) => {
     await page.goto('/');
     await page.getByPlaceholder('your@email.com').fill(email);
     await page.getByPlaceholder('••••••••').fill(password);
-    await page.locator('form').getByRole('button', { name: '登入' }).click();
-    await expect(page.getByText('研究者儀表板')).toBeVisible({ timeout: 20000 });
+    await page.locator('form button[type="submit"]').click();
+    await expect(page.getByText(/研究者儀表板/)).toBeVisible({ timeout: 20_000 });
 
-    // Verify stats
-    await expect(page.getByText('收案人數')).toBeVisible();
+    await expect(page.getByText('ENROLLED')).toBeVisible();
 
-    // Navigate to lookup
     await page.locator('nav.bottom-nav').getByText('查詢').click();
-    await expect(page.getByText('病人查詢')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('病人查詢')).toBeVisible({ timeout: 5_000 });
 
-    // Navigate to review
     await page.locator('nav.bottom-nav').getByText('審核').click();
-    await expect(page.getByText('AI 回覆審核')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('AI 回覆審核')).toBeVisible({ timeout: 5_000 });
 
-    // Back to dashboard
     await page.locator('nav.bottom-nav').getByText('概覽').click();
-    await expect(page.getByText('研究者儀表板')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/研究者儀表板/)).toBeVisible({ timeout: 5_000 });
 
-    // Logout
-    await page.getByRole('button', { name: '登出' }).click();
-    await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10000 });
+    await page.getByLabel('登出').click();
+    await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10_000 });
   });
 });

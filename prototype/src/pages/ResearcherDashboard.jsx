@@ -42,6 +42,44 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
   const [researcherResult, setResearcherResult] = useState('');
   const [researcherError, setResearcherError] = useState('');
 
+  // Researcher list state (PI-only)
+  const [teamList, setTeamList] = useState([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [teamError, setTeamError] = useState('');
+  const [banningId, setBanningId] = useState(null);
+
+  const loadTeam = async () => {
+    setTeamLoading(true); setTeamError('');
+    try {
+      const list = await sb.listResearchers();
+      setTeamList(list);
+    } catch (err) {
+      setTeamError(err?.message || '載入失敗');
+    } finally {
+      setTeamLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isDemo && userInfo?.role === 'pi') loadTeam();
+  }, [isDemo, userInfo?.role]);
+
+  const toggleBan = async (u) => {
+    const isBanned = !!u.banned_until && new Date(u.banned_until) > new Date();
+    const verb = isBanned ? '啟用' : '停用';
+    if (!window.confirm(`確定要${verb}「${u.display_name || u.email}」嗎？`)) return;
+    setBanningId(u.id);
+    try {
+      if (isBanned) await sb.unbanResearcher(u.id);
+      else await sb.banResearcher(u.id);
+      await loadTeam();
+    } catch (err) {
+      alert(`${verb}失敗：${err?.message || '未知錯誤'}`);
+    } finally {
+      setBanningId(null);
+    }
+  };
+
   useEffect(() => {
     if (!isDemo) {
       sb.listStudyInvites().then(rows => setRecentInvites(rows.slice(0, 5)));
@@ -84,6 +122,7 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
       setResearcherResult(`✓ 已寄出邀請信到 ${researcherEmail.trim()}`);
       setResearcherEmail('');
       setResearcherName('');
+      loadTeam();
     } catch (err) {
       setResearcherError(err?.message || '邀請失敗');
     } finally {
@@ -476,6 +515,117 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
               letterSpacing: '0.04em',
             }}>
               {researcherResult}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Team list (PI-only) */}
+      {!isDemo && userInfo?.role === 'pi' && (
+        <div className="card">
+          <div className="card-head">
+            <div className="card-head-left">
+              <div className="card-icon"><I.User width={14} height={14} /></div>
+              <div>
+                <div className="card-kicker">Team · {teamList.length}</div>
+                <div className="card-title">研究團隊名單</div>
+              </div>
+            </div>
+            <button type="button" className="icon-btn" onClick={loadTeam}
+              disabled={teamLoading} aria-label="重新載入">
+              <I.Refresh width={14} height={14} />
+            </button>
+          </div>
+
+          {teamError && (
+            <div className="alert-banner danger" style={{ marginBottom: 10 }}>
+              <div className="al-icon"><I.Alert width={18} height={18} /></div>
+              <div><div className="al-msg">{teamError}</div></div>
+            </div>
+          )}
+
+          {teamLoading && teamList.length === 0 && (
+            <p style={{ fontSize: 12, color: 'var(--ink-3)', textAlign: 'center', padding: '10px 0', fontFamily: 'var(--font-mono)' }}>
+              載入中…
+            </p>
+          )}
+
+          {!teamLoading && teamList.length === 0 && !teamError && (
+            <p style={{ fontSize: 12, color: 'var(--ink-3)', textAlign: 'center', padding: '10px 0' }}>
+              尚無研究人員
+            </p>
+          )}
+
+          {teamList.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {teamList.map((u) => {
+                const isBanned = !!u.banned_until && new Date(u.banned_until) > new Date();
+                const isSelf = u.id === (userInfo?.id || null);
+                const roleLabel = u.role === 'pi' ? '主持人' : '研究人員';
+                return (
+                  <div key={u.id} style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr auto',
+                    alignItems: 'center', gap: 10,
+                    padding: '10px 12px',
+                    background: isBanned ? 'var(--surface-sunk)' : 'var(--surface-2)',
+                    border: '1px solid var(--line)',
+                    borderLeft: isBanned ? '3px solid var(--danger)' : (u.role === 'pi' ? '3px solid var(--accent)' : '1px solid var(--line)'),
+                    borderRadius: 8,
+                    opacity: isBanned ? 0.7 : 1,
+                  }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {u.display_name || '(未命名)'}
+                        </span>
+                        <span className={`chip ${u.role === 'pi' ? 'chip-warn' : 'chip-ok'}`}
+                          style={{ padding: '1px 7px', fontSize: 9.5, fontFamily: 'var(--font-mono)' }}>
+                          {roleLabel}
+                        </span>
+                        {isBanned && (
+                          <span className="chip chip-danger" style={{ padding: '1px 7px', fontSize: 9.5, fontFamily: 'var(--font-mono)' }}>
+                            已停用
+                          </span>
+                        )}
+                      </div>
+                      <div style={{
+                        fontSize: 11, color: 'var(--ink-3)',
+                        fontFamily: 'var(--font-mono)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {u.email}
+                      </div>
+                      {u.last_sign_in_at && (
+                        <div style={{ fontSize: 10, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                          last: {new Date(u.last_sign_in_at).toLocaleDateString('zh-TW')}
+                        </div>
+                      )}
+                    </div>
+                    {!isSelf && (
+                      <button type="button"
+                        onClick={() => toggleBan(u)}
+                        disabled={banningId === u.id}
+                        style={{
+                          background: isBanned ? 'var(--ok-soft)' : 'var(--danger-soft)',
+                          border: `1px solid ${isBanned ? 'var(--ok)' : 'var(--danger)'}`,
+                          color: isBanned ? 'var(--ok)' : 'var(--danger)',
+                          borderRadius: 6, padding: '4px 10px',
+                          fontSize: 11, cursor: 'pointer',
+                          fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
+                          whiteSpace: 'nowrap',
+                        }}>
+                        {banningId === u.id ? '處理中…' : (isBanned ? '啟用' : '停用')}
+                      </button>
+                    )}
+                    {isSelf && (
+                      <span style={{ fontSize: 10, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)' }}>
+                        （你）
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
