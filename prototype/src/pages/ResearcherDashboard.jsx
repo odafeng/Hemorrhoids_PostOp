@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getResearcherMockData } from '../utils/storage';
 import * as sb from '../utils/supabaseService';
 import ResearcherCharts from '../components/ResearcherCharts';
@@ -14,6 +15,7 @@ const SURGEON_PREFIXES = Object.keys(SURGEON_NAMES);
 const getSurgeonId = (p) => p.surgeon_id || (p.study_id?.includes('-') ? p.study_id.split('-')[0].toUpperCase() : null);
 
 export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLogout }) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [patients, setPatients] = useState([]);
   const [adherence, setAdherence] = useState([]);
@@ -706,6 +708,27 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
               </div>
               <div className={`chip chip-${tone || 'ok'}`}>{statusLabel(row)}</div>
               <div className="cr-last">{row.adherence_pct ?? 0}%</div>
+              {!isDemo && (
+                <button type="button"
+                  onClick={() => navigate(`/surgical-record/${row.study_id}`)}
+                  aria-label={`撰寫 ${row.study_id} 手術紀錄`}
+                  title="撰寫手術紀錄"
+                  style={{
+                    gridColumn: '1 / -1',
+                    marginTop: 2,
+                    padding: '6px 10px',
+                    fontSize: 11,
+                    fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
+                    background: 'var(--surface-2)',
+                    border: '1px solid var(--line)',
+                    borderRadius: 6,
+                    color: 'var(--ink-2)',
+                    cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  }}>
+                  <I.Edit width={12} height={12} /> 撰寫手術紀錄
+                </button>
+              )}
             </div>
           );
         })}

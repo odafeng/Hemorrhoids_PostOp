@@ -117,23 +117,48 @@ export default function ConsentPage({ userInfo, onConsent, onDecline }) {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
-    const rect = canvas.getBoundingClientRect();
 
-    canvas.width = rect.width * 2;
-    canvas.height = rect.height * 2;
-    ctx.scale(2, 2);
-    ctx.strokeStyle = '#111';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    // Re-initialise backing store + drawing style. Size uses CURRENT rect
+    // because the consent page requires scrolling past the full IRB text
+    // before reaching the canvas — mount-time rect can be stale.
+    const dpr = window.devicePixelRatio || 1;
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0) return;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+      ctx.strokeStyle = '#111';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+    };
+    resize();
+    window.addEventListener('resize', resize);
 
+    // getPos uses a FRESH rect on every event so it's immune to scrolling
+    // / zooming / layout shifts. clientX/Y are viewport coords; we need to
+    // subtract the canvas's viewport offset to get canvas-local coords.
     const getPos = (e) => {
-      const t = e.touches?.[0];
+      const rect = canvas.getBoundingClientRect();
+      const t = e.touches?.[0] || e.changedTouches?.[0];
       const cx = t ? t.clientX : e.clientX;
       const cy = t ? t.clientY : e.clientY;
       return { x: cx - rect.left, y: cy - rect.top };
     };
-    const start = (e) => { e.preventDefault(); isDrawingRef.current = true; lastPosRef.current = getPos(e); };
+
+    const start = (e) => {
+      e.preventDefault();
+      isDrawingRef.current = true;
+      lastPosRef.current = getPos(e);
+      // Draw a dot so a single tap registers too
+      const { x, y } = lastPosRef.current;
+      ctx.beginPath();
+      ctx.arc(x, y, 1, 0, Math.PI * 2);
+      ctx.fillStyle = '#111';
+      ctx.fill();
+    };
     const move = (e) => {
       if (!isDrawingRef.current) return;
       e.preventDefault();
@@ -150,21 +175,25 @@ export default function ConsentPage({ userInfo, onConsent, onDecline }) {
       setSignatureData(canvas.toDataURL('image/png'));
     };
 
+    // Start on canvas only; move/end on window so drags that leave the
+    // canvas don't break the stroke.
     canvas.addEventListener('mousedown', start);
-    canvas.addEventListener('mousemove', move);
-    canvas.addEventListener('mouseup', end);
-    canvas.addEventListener('mouseleave', end);
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', end);
     canvas.addEventListener('touchstart', start, { passive: false });
-    canvas.addEventListener('touchmove', move, { passive: false });
-    canvas.addEventListener('touchend', end);
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('touchend', end);
+    window.addEventListener('touchcancel', end);
+
     return () => {
+      window.removeEventListener('resize', resize);
       canvas.removeEventListener('mousedown', start);
-      canvas.removeEventListener('mousemove', move);
-      canvas.removeEventListener('mouseup', end);
-      canvas.removeEventListener('mouseleave', end);
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', end);
       canvas.removeEventListener('touchstart', start);
-      canvas.removeEventListener('touchmove', move);
-      canvas.removeEventListener('touchend', end);
+      window.removeEventListener('touchmove', move);
+      window.removeEventListener('touchend', end);
+      window.removeEventListener('touchcancel', end);
     };
   }, []);
 

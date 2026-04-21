@@ -4,12 +4,16 @@ import ConsentPage from '../ConsentPage';
 
 const mockCtx = {
   scale: vi.fn(),
+  setTransform: vi.fn(),
   beginPath: vi.fn(),
   moveTo: vi.fn(),
   lineTo: vi.fn(),
   stroke: vi.fn(),
   clearRect: vi.fn(),
+  arc: vi.fn(),
+  fill: vi.fn(),
   strokeStyle: '',
+  fillStyle: '',
   lineWidth: 0,
   lineCap: '',
   lineJoin: '',
@@ -48,9 +52,10 @@ describe('ConsentPage', () => {
 
   const simulateSignature = (container) => {
     const canvas = container.querySelector('canvas');
+    // start fires on canvas; move/end now listen on window (fix for scroll-aware drawing)
     fireEvent.mouseDown(canvas, { clientX: 10, clientY: 10 });
-    fireEvent.mouseMove(canvas, { clientX: 40, clientY: 30 });
-    fireEvent.mouseUp(canvas);
+    fireEvent.mouseMove(window, { clientX: 40, clientY: 30 });
+    fireEvent.mouseUp(window);
   };
 
   it('renders consent title and IRB eyebrow', () => {
