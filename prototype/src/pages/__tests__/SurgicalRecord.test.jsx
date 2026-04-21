@@ -110,6 +110,22 @@ describe('SurgicalRecord', () => {
     expect(payload.laser_joules['3']).toBe(250);
     expect(payload.surgeon_id).toBe('HSF');
     expect(payload.hemorrhoidectomy_subtype).toBeNull();
+    // Laser-only extras default to not-present
+    expect(payload.combined_partial_hemorrhoidectomy).toBe(false);
+    expect(payload.pedicle_ligation).toBe(false);
+    expect(payload.mucosal_injury).toBe(false);
+    // Hemorrhoidectomy-only extras are scrubbed for laser procedure
+    expect(payload.energy_device).toEqual([]);
+    expect(payload.suture_material).toBeNull();
+    // self_paid is structured object, not array
+    expect(typeof payload.self_paid).toBe('object');
+    expect(Array.isArray(payload.self_paid.hemostatic_gauze)).toBe(true);
+    // wound_spray replaces legacy newepi boolean
+    expect(Array.isArray(payload.self_paid.wound_spray)).toBe(true);
+    expect(payload.self_paid.newepi).toBeUndefined();
+    // Common findings default to false when not selected
+    expect(payload.skin_tags).toBe(false);
+    expect(payload.thrombus).toBe(false);
   });
 
   it('surfaces RLS error with friendly message', async () => {

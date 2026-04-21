@@ -17,13 +17,26 @@ const POSITIONS = [
   { v: 'left_lateral',    label: 'Left lateral' },
   { v: 'other',           label: '其他' },
 ];
-const SELF_PAID = [
-  { v: 'quikclot', label: 'Quikclot 止血紗' },
-  { v: 'prp',      label: 'PRP' },
-  { v: 'healiaid', label: 'Healiaid' },
-  { v: 'newepi',   label: 'NewEpi' },
+const HEMOSTATIC_GAUZE = [
+  { v: 'quikclot', label: 'Quikclot' },
+  { v: 'military', label: '國軍' },
   { v: 'other',    label: '其他' },
 ];
+const WOUND_GEL = [
+  { v: 'liquidband', label: 'LiquidBand' },
+  { v: 'glitch',     label: 'Glitch' },
+  { v: 'other',      label: '其他' },
+];
+const WOUND_SPRAY = [
+  { v: 'newepi', label: 'NewEpi' },
+  { v: 'other',  label: '其他' },
+];
+const ENERGY_DEVICES = [
+  { v: 'ligasure',  label: 'LigaSure' },
+  { v: 'powerseal', label: 'Powerseal' },
+  { v: 'harmonic',  label: 'Harmonic' },
+];
+const SUBTYPES_NEEDING_SUTURE = new Set(['closed', 'semi_open', 'semi_closed']);
 
 export default function SurgicalRecord({ isDemo, userInfo }) {
   const { studyId } = useParams();
@@ -46,8 +59,33 @@ export default function SurgicalRecord({ isDemo, userInfo }) {
   const [bloodLoss, setBloodLoss] = useState('');
   const [duration, setDuration] = useState('');
   const [position, setPosition] = useState('');
-  const [selfPaid, setSelfPaid] = useState([]);
+  const [selfPaid, setSelfPaid] = useState({
+    hemostatic_gauze: [],
+    hemostatic_gauze_other: '',
+    wound_gel: [],
+    wound_gel_other: '',
+    wound_spray: [],
+    wound_spray_other: '',
+    prp: false,
+    prp_brand: '',
+    healiaid: false,
+    other: '',
+  });
   const [notes, setNotes] = useState('');
+  // Common findings (both procedures)
+  const [skinTags, setSkinTags] = useState(false);
+  const [thrombus, setThrombus] = useState(false);
+  // Laser-only extras
+  const [partialHem, setPartialHem] = useState(false);
+  const [partialHemPositions, setPartialHemPositions] = useState([]);
+  const [pedicleLig, setPedicleLig] = useState(false);
+  const [pedicleLigPositions, setPedicleLigPositions] = useState([]);
+  const [mucosalInjury, setMucosalInjury] = useState(false);
+  const [mucosalRepaired, setMucosalRepaired] = useState(null);
+  const [mucosalInjuryPositions, setMucosalInjuryPositions] = useState([]);
+  // Hemorrhoidectomy-only extras
+  const [energyDevice, setEnergyDevice] = useState(['ligasure']);
+  const [sutureMaterial, setSutureMaterial] = useState('');
 
   useEffect(() => {
     const load = async () => {
@@ -76,8 +114,36 @@ export default function SurgicalRecord({ isDemo, userInfo }) {
           setBloodLoss(rec.blood_loss_ml ?? '');
           setDuration(rec.duration_min ?? '');
           setPosition(rec.patient_position || '');
-          setSelfPaid(rec.self_paid_items || []);
+          if (rec.self_paid) {
+            // Back-compat: legacy rows stored newepi as a boolean; promote into wound_spray group.
+            const legacyNewepi = !!rec.self_paid.newepi;
+            const spray = rec.self_paid.wound_spray
+              || (legacyNewepi ? ['newepi'] : []);
+            setSelfPaid({
+              hemostatic_gauze: rec.self_paid.hemostatic_gauze || [],
+              hemostatic_gauze_other: rec.self_paid.hemostatic_gauze_other || '',
+              wound_gel: rec.self_paid.wound_gel || [],
+              wound_gel_other: rec.self_paid.wound_gel_other || '',
+              wound_spray: spray,
+              wound_spray_other: rec.self_paid.wound_spray_other || '',
+              prp: !!rec.self_paid.prp,
+              prp_brand: rec.self_paid.prp_brand || '',
+              healiaid: !!rec.self_paid.healiaid,
+              other: rec.self_paid.other || '',
+            });
+          }
           setNotes(rec.notes || '');
+          setSkinTags(!!rec.skin_tags);
+          setThrombus(!!rec.thrombus);
+          setPartialHem(!!rec.combined_partial_hemorrhoidectomy);
+          setPartialHemPositions(rec.combined_partial_hemorrhoidectomy_positions || []);
+          setPedicleLig(!!rec.pedicle_ligation);
+          setPedicleLigPositions(rec.pedicle_ligation_positions || []);
+          setMucosalInjury(!!rec.mucosal_injury);
+          setMucosalRepaired(rec.mucosal_injury_repaired);
+          setMucosalInjuryPositions(rec.mucosal_injury_positions || []);
+          setEnergyDevice(rec.energy_device && rec.energy_device.length ? rec.energy_device : ['ligasure']);
+          setSutureMaterial(rec.suture_material || '');
         }
       } catch (err) {
         setError(err?.message || '載入失敗');
@@ -88,14 +154,19 @@ export default function SurgicalRecord({ isDemo, userInfo }) {
     load();
   }, [studyId, isDemo]);
 
-  const toggleClock = (n) => {
-    setClockPositions((prev) =>
-      prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n].sort((a, b) => a - b)
-    );
+  const toggleClockIn = (list, setList) => (n) => {
+    setList(list.includes(n) ? list.filter((x) => x !== n) : [...list, n].sort((a, b) => a - b));
   };
-  const toggleSelfPaid = (v) => {
-    setSelfPaid((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
-  };
+  const toggleClock = toggleClockIn(clockPositions, setClockPositions);
+  const togglePartialHemPos = toggleClockIn(partialHemPositions, setPartialHemPositions);
+  const togglePedicleLigPos = toggleClockIn(pedicleLigPositions, setPedicleLigPositions);
+  const toggleMucosalPos = toggleClockIn(mucosalInjuryPositions, setMucosalInjuryPositions);
+
+  const toggleInArray = (arr, v) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+  const toggleGauze = (v) => setSelfPaid((p) => ({ ...p, hemostatic_gauze: toggleInArray(p.hemostatic_gauze, v) }));
+  const toggleWoundGel = (v) => setSelfPaid((p) => ({ ...p, wound_gel: toggleInArray(p.wound_gel, v) }));
+  const toggleSpray = (v) => setSelfPaid((p) => ({ ...p, wound_spray: toggleInArray(p.wound_spray, v) }));
+  const toggleEnergy = (v) => setEnergyDevice((p) => toggleInArray(p, v));
 
   const canSubmit = !!procedureType && !!grade && !isReadOnly && !submitting;
 
@@ -105,12 +176,30 @@ export default function SurgicalRecord({ isDemo, userInfo }) {
     setError('');
     setSuccess('');
 
+    const isLaser = procedureType === 'laser_hemorrhoidoplasty';
+    const isHem = procedureType === 'hemorrhoidectomy';
+    const needsSuture = isHem && SUBTYPES_NEEDING_SUTURE.has(subtype);
+
+    // Scrub "other" text fields when the corresponding "其他" chip isn't selected
+    const cleanedSelfPaid = {
+      hemostatic_gauze: selfPaid.hemostatic_gauze,
+      hemostatic_gauze_other: selfPaid.hemostatic_gauze.includes('other') ? (selfPaid.hemostatic_gauze_other || '').trim() : '',
+      wound_gel: selfPaid.wound_gel,
+      wound_gel_other: selfPaid.wound_gel.includes('other') ? (selfPaid.wound_gel_other || '').trim() : '',
+      wound_spray: selfPaid.wound_spray,
+      wound_spray_other: selfPaid.wound_spray.includes('other') ? (selfPaid.wound_spray_other || '').trim() : '',
+      prp: selfPaid.prp,
+      prp_brand: selfPaid.prp ? (selfPaid.prp_brand || '').trim() : '',
+      healiaid: selfPaid.healiaid,
+      other: (selfPaid.other || '').trim(),
+    };
+
     const payload = {
       procedure_type: procedureType,
-      hemorrhoidectomy_subtype: procedureType === 'hemorrhoidectomy' ? (subtype || null) : null,
+      hemorrhoidectomy_subtype: isHem ? (subtype || null) : null,
       hemorrhoid_grade: grade,
       clock_positions: clockPositions,
-      laser_joules: procedureType === 'laser_hemorrhoidoplasty'
+      laser_joules: isLaser
         ? {
             3: joules[3] ? Number(joules[3]) : null,
             7: joules[7] ? Number(joules[7]) : null,
@@ -120,8 +209,22 @@ export default function SurgicalRecord({ isDemo, userInfo }) {
       blood_loss_ml: bloodLoss === '' ? null : Number(bloodLoss),
       duration_min: duration === '' ? null : Number(duration),
       patient_position: position || null,
-      self_paid_items: selfPaid,
+      self_paid: cleanedSelfPaid,
       notes: notes.trim() || null,
+      // Laser-only extras
+      combined_partial_hemorrhoidectomy: isLaser ? partialHem : false,
+      combined_partial_hemorrhoidectomy_positions: isLaser && partialHem ? partialHemPositions : [],
+      pedicle_ligation: isLaser ? pedicleLig : false,
+      pedicle_ligation_positions: isLaser && pedicleLig ? pedicleLigPositions : [],
+      mucosal_injury: isLaser ? mucosalInjury : false,
+      mucosal_injury_repaired: isLaser && mucosalInjury ? mucosalRepaired : null,
+      mucosal_injury_positions: isLaser && mucosalInjury ? mucosalInjuryPositions : [],
+      // Hemorrhoidectomy-only extras
+      energy_device: isHem ? energyDevice : [],
+      suture_material: needsSuture ? (sutureMaterial.trim() || null) : null,
+      // Common findings
+      skin_tags: skinTags,
+      thrombus: thrombus,
       recorded_by: userInfo?.id || null,
       surgeon_id: patient?.surgeon_id || userInfo?.surgeonId || null,
     };
@@ -241,6 +344,35 @@ export default function SurgicalRecord({ isDemo, userInfo }) {
         </div>
       )}
 
+      {/* Energy device (hemorrhoidectomy only) */}
+      {procedureType === 'hemorrhoidectomy' && (
+        <div className="field">
+          <div className="field-lbl">Energy device <span className="hint">可複選</span></div>
+          <div className="chip-grid">
+            {ENERGY_DEVICES.map((o) => (
+              <button key={o.v} type="button"
+                className={`chip ${energyDevice.includes(o.v) ? 'selected' : ''}`}
+                onClick={() => !isReadOnly && toggleEnergy(o.v)}
+                disabled={isReadOnly}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Suture material (closed / semi-open / semi-closed only) */}
+      {procedureType === 'hemorrhoidectomy' && SUBTYPES_NEEDING_SUTURE.has(subtype) && (
+        <div className="field">
+          <div className="field-lbl">縫線 <span className="hint">廠牌 / 規格</span></div>
+          <input className="input" type="text"
+            placeholder="例如：Vicryl 3-0、Monocryl 4-0"
+            value={sutureMaterial}
+            onChange={(e) => !isReadOnly && setSutureMaterial(e.target.value)}
+            disabled={isReadOnly} />
+        </div>
+      )}
+
       {/* Grade */}
       <div className="field">
         <div className="field-lbl">痔瘡分級 <span className="hint">Goligher</span></div>
@@ -271,6 +403,36 @@ export default function SurgicalRecord({ isDemo, userInfo }) {
         </div>
       </div>
 
+      {/* Skin tags */}
+      <div className="field">
+        <div className="field-lbl">Skin tags</div>
+        <div className="opt-row">
+          <button type="button" className={`opt ${skinTags === false ? 'selected' : ''}`}
+            onClick={() => !isReadOnly && setSkinTags(false)} disabled={isReadOnly}>
+            <span className="opt-main">否</span>
+          </button>
+          <button type="button" className={`opt ${skinTags === true ? 'selected' : ''}`}
+            onClick={() => !isReadOnly && setSkinTags(true)} disabled={isReadOnly}>
+            <span className="opt-main">是</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Thrombus */}
+      <div className="field">
+        <div className="field-lbl">Thrombus</div>
+        <div className="opt-row">
+          <button type="button" className={`opt ${thrombus === false ? 'selected' : ''}`}
+            onClick={() => !isReadOnly && setThrombus(false)} disabled={isReadOnly}>
+            <span className="opt-main">否</span>
+          </button>
+          <button type="button" className={`opt ${thrombus === true ? 'selected' : ''}`}
+            onClick={() => !isReadOnly && setThrombus(true)} disabled={isReadOnly}>
+            <span className="opt-main">是</span>
+          </button>
+        </div>
+      </div>
+
       {/* Laser joules */}
       {procedureType === 'laser_hemorrhoidoplasty' && (
         <div className="field">
@@ -288,6 +450,120 @@ export default function SurgicalRecord({ isDemo, userInfo }) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Laser-only extras: partial hemorrhoidectomy */}
+      {procedureType === 'laser_hemorrhoidoplasty' && (
+        <div className="field">
+          <div className="field-lbl">合併 partial hemorrhoidectomy</div>
+          <div className="opt-row">
+            <button type="button" className={`opt ${partialHem === false ? 'selected' : ''}`}
+              onClick={() => !isReadOnly && setPartialHem(false)} disabled={isReadOnly}>
+              <span className="opt-main">否</span>
+            </button>
+            <button type="button" className={`opt ${partialHem === true ? 'selected' : ''}`}
+              onClick={() => !isReadOnly && setPartialHem(true)} disabled={isReadOnly}>
+              <span className="opt-main">是</span>
+            </button>
+          </div>
+          {partialHem && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 10.5, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', marginBottom: 6 }}>
+                方位 · 時鐘方向 · 可複選
+              </div>
+              <div className="chip-grid">
+                {CLOCK_POSITIONS.map((n) => (
+                  <button key={n} type="button"
+                    className={`chip ${partialHemPositions.includes(n) ? 'selected' : ''}`}
+                    onClick={() => !isReadOnly && togglePartialHemPos(n)}
+                    disabled={isReadOnly}>{n}</button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Laser-only extras: pedicle ligation */}
+      {procedureType === 'laser_hemorrhoidoplasty' && (
+        <div className="field">
+          <div className="field-lbl">Pedicle ligation</div>
+          <div className="opt-row">
+            <button type="button" className={`opt ${pedicleLig === false ? 'selected' : ''}`}
+              onClick={() => !isReadOnly && setPedicleLig(false)} disabled={isReadOnly}>
+              <span className="opt-main">否</span>
+            </button>
+            <button type="button" className={`opt ${pedicleLig === true ? 'selected' : ''}`}
+              onClick={() => !isReadOnly && setPedicleLig(true)} disabled={isReadOnly}>
+              <span className="opt-main">是</span>
+            </button>
+          </div>
+          {pedicleLig && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 10.5, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', marginBottom: 6 }}>
+                方位 · 時鐘方向 · 可複選
+              </div>
+              <div className="chip-grid">
+                {CLOCK_POSITIONS.map((n) => (
+                  <button key={n} type="button"
+                    className={`chip ${pedicleLigPositions.includes(n) ? 'selected' : ''}`}
+                    onClick={() => !isReadOnly && togglePedicleLigPos(n)}
+                    disabled={isReadOnly}>{n}</button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Laser-only extras: mucosal laser energy injury */}
+      {procedureType === 'laser_hemorrhoidoplasty' && (
+        <div className="field">
+          <div className="field-lbl">Mucosal laser energy injury</div>
+          <div className="opt-row">
+            <button type="button" className={`opt ${mucosalInjury === false ? 'selected' : ''}`}
+              onClick={() => { if (!isReadOnly) { setMucosalInjury(false); setMucosalRepaired(null); } }}
+              disabled={isReadOnly}>
+              <span className="opt-main">否</span>
+            </button>
+            <button type="button" className={`opt ${mucosalInjury === true ? 'selected danger' : ''}`}
+              onClick={() => !isReadOnly && setMucosalInjury(true)} disabled={isReadOnly}>
+              <span className="opt-main">是</span>
+            </button>
+          </div>
+          {mucosalInjury && (
+            <>
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 10.5, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', marginBottom: 6 }}>
+                  有無 repair
+                </div>
+                <div className="opt-row">
+                  <button type="button" className={`opt ${mucosalRepaired === false ? 'selected danger' : ''}`}
+                    onClick={() => !isReadOnly && setMucosalRepaired(false)} disabled={isReadOnly}>
+                    <span className="opt-main">無 repair</span>
+                  </button>
+                  <button type="button" className={`opt ${mucosalRepaired === true ? 'selected' : ''}`}
+                    onClick={() => !isReadOnly && setMucosalRepaired(true)} disabled={isReadOnly}>
+                    <span className="opt-main">已 repair</span>
+                  </button>
+                </div>
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 10.5, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', letterSpacing: '0.08em', marginBottom: 6 }}>
+                  方位 · 時鐘方向 · 可複選
+                </div>
+                <div className="chip-grid">
+                  {CLOCK_POSITIONS.map((n) => (
+                    <button key={n} type="button"
+                      className={`chip ${mucosalInjuryPositions.includes(n) ? 'selected' : ''}`}
+                      onClick={() => !isReadOnly && toggleMucosalPos(n)}
+                      disabled={isReadOnly}>{n}</button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -327,15 +603,117 @@ export default function SurgicalRecord({ isDemo, userInfo }) {
       {/* Self-paid items */}
       <div className="field">
         <div className="field-lbl">自費品項 <span className="hint">可複選</span></div>
-        <div className="chip-grid">
-          {SELF_PAID.map((o) => (
-            <button key={o.v} type="button"
-              className={`chip ${selfPaid.includes(o.v) ? 'selected' : ''}`}
-              onClick={() => !isReadOnly && toggleSelfPaid(o.v)}
+
+        {/* 止血紗 */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-2)', fontWeight: 600, marginBottom: 6 }}>止血紗</div>
+          <div className="chip-grid">
+            {HEMOSTATIC_GAUZE.map((o) => (
+              <button key={o.v} type="button"
+                className={`chip ${selfPaid.hemostatic_gauze.includes(o.v) ? 'selected' : ''}`}
+                onClick={() => !isReadOnly && toggleGauze(o.v)}
+                disabled={isReadOnly}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+          {selfPaid.hemostatic_gauze.includes('other') && (
+            <input className="input" style={{ marginTop: 8 }}
+              type="text" placeholder="止血紗品名"
+              value={selfPaid.hemostatic_gauze_other}
+              onChange={(e) => !isReadOnly && setSelfPaid((p) => ({ ...p, hemostatic_gauze_other: e.target.value }))}
+              disabled={isReadOnly} />
+          )}
+        </div>
+
+        {/* 傷口凝膠 */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-2)', fontWeight: 600, marginBottom: 6 }}>傷口凝膠</div>
+          <div className="chip-grid">
+            {WOUND_GEL.map((o) => (
+              <button key={o.v} type="button"
+                className={`chip ${selfPaid.wound_gel.includes(o.v) ? 'selected' : ''}`}
+                onClick={() => !isReadOnly && toggleWoundGel(o.v)}
+                disabled={isReadOnly}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+          {selfPaid.wound_gel.includes('other') && (
+            <input className="input" style={{ marginTop: 8 }}
+              type="text" placeholder="傷口凝膠品名"
+              value={selfPaid.wound_gel_other}
+              onChange={(e) => !isReadOnly && setSelfPaid((p) => ({ ...p, wound_gel_other: e.target.value }))}
+              disabled={isReadOnly} />
+          )}
+        </div>
+
+        {/* PRP */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-2)', fontWeight: 600, marginBottom: 6 }}>PRP</div>
+          <div className="opt-row">
+            <button type="button"
+              className={`opt ${!selfPaid.prp ? 'selected' : ''}`}
+              onClick={() => !isReadOnly && setSelfPaid((p) => ({ ...p, prp: false, prp_brand: '' }))}
               disabled={isReadOnly}>
-              {o.label}
+              <span className="opt-main">否</span>
             </button>
-          ))}
+            <button type="button"
+              className={`opt ${selfPaid.prp ? 'selected' : ''}`}
+              onClick={() => !isReadOnly && setSelfPaid((p) => ({ ...p, prp: true }))}
+              disabled={isReadOnly}>
+              <span className="opt-main">是</span>
+            </button>
+          </div>
+          {selfPaid.prp && (
+            <input className="input" style={{ marginTop: 8 }}
+              type="text" placeholder="PRP 廠牌（例如：Regen Lab）"
+              value={selfPaid.prp_brand}
+              onChange={(e) => !isReadOnly && setSelfPaid((p) => ({ ...p, prp_brand: e.target.value }))}
+              disabled={isReadOnly} />
+          )}
+        </div>
+
+        {/* 傷口噴劑 */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-2)', fontWeight: 600, marginBottom: 6 }}>傷口噴劑</div>
+          <div className="chip-grid">
+            {WOUND_SPRAY.map((o) => (
+              <button key={o.v} type="button"
+                className={`chip ${selfPaid.wound_spray.includes(o.v) ? 'selected' : ''}`}
+                onClick={() => !isReadOnly && toggleSpray(o.v)}
+                disabled={isReadOnly}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+          {selfPaid.wound_spray.includes('other') && (
+            <input className="input" style={{ marginTop: 8 }}
+              type="text" placeholder="傷口噴劑品名"
+              value={selfPaid.wound_spray_other}
+              onChange={(e) => !isReadOnly && setSelfPaid((p) => ({ ...p, wound_spray_other: e.target.value }))}
+              disabled={isReadOnly} />
+          )}
+        </div>
+
+        {/* Healiaid */}
+        <div className="btn-row" style={{ marginBottom: 12 }}>
+          <button type="button"
+            className={`opt ${selfPaid.healiaid ? 'selected' : ''}`}
+            onClick={() => !isReadOnly && setSelfPaid((p) => ({ ...p, healiaid: !p.healiaid }))}
+            disabled={isReadOnly}>
+            <span className="opt-main">Healiaid</span>
+          </button>
+        </div>
+
+        {/* 其他自費品項 自由文字 */}
+        <div>
+          <div style={{ fontSize: 11.5, color: 'var(--ink-2)', fontWeight: 600, marginBottom: 6 }}>其他自費品項</div>
+          <input className="input" type="text"
+            placeholder="其他自費耗材（自由輸入）"
+            value={selfPaid.other}
+            onChange={(e) => !isReadOnly && setSelfPaid((p) => ({ ...p, other: e.target.value }))}
+            disabled={isReadOnly} />
         </div>
       </div>
 
