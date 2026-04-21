@@ -20,6 +20,7 @@ vi.mock('../../utils/supabaseService', () => ({
   upsertNotifPrefs: vi.fn().mockResolvedValue({}),
   savePushSubscription: vi.fn().mockResolvedValue({}),
   removePushSubscription: vi.fn().mockResolvedValue({}),
+  sendTestPush: vi.fn().mockResolvedValue({ ok: true, sent: 1, failed: 0 }),
 }));
 
 describe('NotificationSetup', () => {
@@ -110,8 +111,9 @@ describe('NotificationSetup', () => {
 
     render(<NotificationSetup {...defaultProps} />);
 
-    // Already enabled — should show time input and test button
-    expect(screen.getByLabelText('提醒時間')).toBeInTheDocument();
+    // Already enabled — should show time selects and test button
+    expect(screen.getByLabelText('提醒小時 (24 小時制)')).toBeInTheDocument();
+    expect(screen.getByLabelText('提醒分鐘')).toBeInTheDocument();
     expect(screen.getByText(/測試通知/)).toBeInTheDocument();
   });
 
@@ -131,32 +133,58 @@ describe('NotificationSetup', () => {
     });
   });
 
-  it('handles time change', async () => {
+  it('handles time change via hour + minute selects', async () => {
     const notif = await import('../../utils/notifications');
     notif.isNotificationsEnabled.mockReturnValue(true);
     notif.getNotificationStatus.mockReturnValue('granted');
 
     render(<NotificationSetup {...defaultProps} />);
 
-    const timeInput = screen.getByLabelText('提醒時間');
-    if (timeInput) {
-      fireEvent.change(timeInput, { target: { value: '08:30' } });
-      expect(notif.setReminderTime).toHaveBeenCalledWith(8, 30);
-    }
+    // New UI replaces <input type="time"> with two <select>s to avoid
+    // the Samsung Android native picker bug that displays 19:30 as 7:30.
+    const hourSelect = screen.getByLabelText('提醒小時 (24 小時制)');
+    const minuteSelect = screen.getByLabelText('提醒分鐘');
+
+    fireEvent.change(hourSelect, { target: { value: '8' } });
+    expect(notif.setReminderTime).toHaveBeenCalledWith(8, 0); // minute unchanged from default 0
+
+    notif.setReminderTime.mockClear();
+
+    fireEvent.change(minuteSelect, { target: { value: '30' } });
+    expect(notif.setReminderTime).toHaveBeenCalledWith(8, 30);
   });
 
-  it('test notification button calls showReminderNotification', async () => {
+  it('test notification button calls server-sent push (sendTestPush)', async () => {
     const notif = await import('../../utils/notifications');
     notif.isNotificationsEnabled.mockReturnValue(true);
     notif.getNotificationStatus.mockReturnValue('granted');
+    const sb = await import('../../utils/supabaseService');
 
-    render(<NotificationSetup {...defaultProps} />);
+    // isDemo=false + already-subscribed push so the button hits the server path
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        ready: Promise.resolve({
+          pushManager: {
+            getSubscription: vi.fn().mockResolvedValue({ endpoint: 'https://fcm.example' }),
+          },
+        }),
+      },
+      configurable: true,
+    });
 
-    const testBtn = screen.getByText(/測試通知/);
-    if (testBtn) {
-      fireEvent.click(testBtn);
-      expect(notif.showReminderNotification).toHaveBeenCalled();
-    }
+    render(<NotificationSetup studyId="HEM-001" isDemo={false} />);
+
+    // Wait for pushStatus to settle to 'subscribed' before firing the button
+    await waitFor(() => expect(screen.getByText(/測試通知/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText(/測試通知/));
+
+    await waitFor(() => {
+      expect(sb.sendTestPush).toHaveBeenCalled();
+    });
+    // The local showReminderNotification path is no longer used — the button
+    // now goes through the production FCM push path via the Edge Function.
+    expect(notif.showReminderNotification).not.toHaveBeenCalled();
   });
 
   it('loads server prefs on mount for non-demo mode', async () => {
