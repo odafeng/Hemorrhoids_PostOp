@@ -147,6 +147,12 @@ body {
   min-height: 100dvh;
   position: relative;
   background: var(--bg);
+  /* Global safe-area-inset-top — every page-level container inherits this,
+     so new screens do NOT need to add var(--safe-top) to their top padding.
+     Page containers still handle their own --safe-bottom (for home indicator
+     clearance) because the bottom nav is position:fixed and isn't affected
+     by #root padding. */
+  padding-top: var(--safe-top);
 }
 
 /* Animations */
@@ -157,8 +163,9 @@ body {
 
 /* Page / view wrapper */
 .page, .view {
-  padding: calc(4px + var(--safe-top)) 20px calc(var(--nav-height) + 12px + var(--safe-bottom));
-  min-height: 100dvh;
+  padding: 4px 20px calc(var(--nav-height) + 12px + var(--safe-bottom));
+  /* Subtract the safe-top padding #root consumes so total height fills viewport */
+  min-height: calc(100dvh - var(--safe-top));
   animation: fadeIn 0.3s ease;
 }
 
@@ -1156,8 +1163,8 @@ input[type=range].slider::-moz-range-thumb {
 /* Login */
 .login {
   display: flex; flex-direction: column;
-  padding: calc(20px + var(--safe-top)) 28px calc(32px + var(--safe-bottom));
-  min-height: 100dvh;
+  padding: 20px 28px calc(32px + var(--safe-bottom));
+  min-height: calc(100dvh - var(--safe-top));
   justify-content: center;
   overflow-y: auto;
   /* Establish positioning context for the absolutely-positioned theme toggle */
@@ -1670,8 +1677,8 @@ input[type=range].slider::-moz-range-thumb {
    Consent (Phase A — ported; now uses global template tokens)
    ============================================================ */
 .consent-view {
-  min-height: 100dvh;
-  padding: calc(28px + var(--safe-top)) 22px calc(28px + env(safe-area-inset-bottom));
+  min-height: calc(100dvh - var(--safe-top));
+  padding: 28px 22px calc(28px + env(safe-area-inset-bottom));
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-body);
