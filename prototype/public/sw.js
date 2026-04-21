@@ -1,4 +1,4 @@
-const CACHE_NAME = 'postop-tracker-v5';
+const CACHE_NAME = 'postop-tracker-v6';
 const STATIC_ASSETS = [
   '/icon.svg',
   '/favicon.svg',
@@ -126,6 +126,7 @@ self.addEventListener('push', (event) => {
       badge: payload.badge,
       tag: payload.tag,
       renotify: true,
+      vibrate: payload.vibrate || [200, 100, 200],
       data: payload.data,
       actions: [
         { action: 'report', title: '立即填寫' },

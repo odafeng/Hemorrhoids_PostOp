@@ -802,3 +802,43 @@ export async function removePushSubscription(studyId, endpoint) {
     .eq('endpoint', endpoint);
   if (error) console.error('[removePushSubscription]', error.message);
 }
+
+/**
+ * Trigger a server-sent Web Push notification to the current user's own
+ * device(s). Unlike reg.showNotification() which is subject to Android's
+ * foreground-suppression rules (in-app heads-up only, no sound / vibrate
+ * when the PWA is in foreground), this path sends a real Push via the
+ * send-test-push Edge Function, which delivers through FCM / APNs and
+ * is surfaced by the system as a full notification with vibrate + sound,
+ * regardless of whether the app is in foreground or background.
+ *
+ * Returns:
+ *   { ok: true,  sent: number, failed: number }
+ *   { ok: false, reason: string, status?: number }
+ */
+export async function sendTestPush() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) return { ok: false, reason: 'not-authenticated' };
+
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-test-push`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      console.warn('[sendTestPush] failed:', res.status, body);
+      return { ok: false, reason: body?.reason || `http-${res.status}`, status: res.status };
+    }
+    return { ok: true, sent: body.sent || 0, failed: body.failed || 0 };
+  } catch (e) {
+    console.error('[sendTestPush] network error:', e);
+    return { ok: false, reason: 'network-error' };
+  }
+}

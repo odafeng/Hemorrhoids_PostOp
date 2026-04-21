@@ -7,7 +7,6 @@ import {
   setNotificationsEnabled,
   getReminderTime,
   setReminderTime,
-  showReminderNotification,
 } from '../utils/notifications';
 import * as sb from '../utils/supabaseService';
 
@@ -27,8 +26,7 @@ export default function NotificationSetup({ studyId, isDemo }) {
   const [time, setTime] = useState(getReminderTime());
   const [justEnabled, setJustEnabled] = useState(false);
   const [pushStatus, setPushStatus] = useState(''); // '', 'subscribing', 'subscribed', 'error'
-  const [testStatus, setTestStatus] = useState(''); // '' | 'countdown' | 'fired' | 'failed' | 'denied'
-  const [countdown, setCountdown] = useState(0);
+  const [testStatus, setTestStatus] = useState(''); // '' | 'sending' | 'fired' | 'failed' | 'denied' | 'no-sub' | 'demo'
 
   // On mount: load server prefs + check existing push subscription
   useEffect(() => {
@@ -135,28 +133,37 @@ export default function NotificationSetup({ studyId, isDemo }) {
   };
 
   const handleTestNotification = async () => {
-    if (testStatus === 'countdown') return; // ignore double-tap
+    if (testStatus === 'sending') return; // ignore double-tap
+    if (isDemo) {
+      setTestStatus('demo');
+      setTimeout(() => setTestStatus(''), 3000);
+      return;
+    }
     if (permission !== 'granted') {
       setTestStatus('denied');
       setTimeout(() => setTestStatus(''), 4000);
       return;
     }
-
-    setTestStatus('countdown');
-    // Count down 3 → 2 → 1 so the user knows when to switch to background.
-    for (let n = 3; n > 0; n--) {
-      setCountdown(n);
-      await new Promise((r) => setTimeout(r, 1000));
+    if (pushStatus !== 'subscribed') {
+      setTestStatus('no-sub');
+      setTimeout(() => setTestStatus(''), 4000);
+      return;
     }
-    setCountdown(0);
 
-    const result = await showReminderNotification();
-    if (result?.fired) {
+    setTestStatus('sending');
+    // Server-sent Web Push — goes through FCM/APNs, arrives as a real system
+    // notification with sound + vibrate regardless of foreground / background.
+    // This matches the production cron path exactly (check-adherence → FCM).
+    const result = await sb.sendTestPush();
+    if (result.ok && result.sent > 0) {
       setTestStatus('fired');
+    } else if (result.reason === 'no-subscription') {
+      setTestStatus('no-sub');
     } else {
       setTestStatus('failed');
+      console.warn('[test-push] failed:', result);
     }
-    setTimeout(() => setTestStatus(''), 5000);
+    setTimeout(() => setTestStatus(''), 6000);
   };
 
   const timeValue = `${String(time.hour).padStart(2, '0')}:${String(time.minute).padStart(2, '0')}`;
@@ -263,21 +270,19 @@ export default function NotificationSetup({ studyId, isDemo }) {
           <button
             className="btn btn-secondary notif-test-btn"
             onClick={handleTestNotification}
-            disabled={testStatus === 'countdown'}
+            disabled={testStatus === 'sending'}
           >
-            {testStatus === 'countdown'
-              ? `⏳ ${countdown} 秒後發送，請切到背景…`
-              : '🔔 測試通知'}
+            {testStatus === 'sending' ? '📡 發送中…' : '🔔 測試通知'}
           </button>
-          {testStatus === 'countdown' && (
-            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--warning)', marginTop: 6, lineHeight: 1.4 }}>
-              💡 Android 的 PWA 在前景時只會顯示 in-app 橫幅（不震動、不進通知列）。
-              按 Home 鍵將 App 切到背景後，才會看到完整的系統通知 + 震動。
+          {testStatus === 'sending' && (
+            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.4 }}>
+              正在透過推播伺服器發送測試通知… 通常 3–10 秒內抵達裝置。
             </div>
           )}
           {testStatus === 'fired' && (
-            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--success)', marginTop: 6 }}>
-              ✓ 測試通知已發送。若在前景只會看到橫幅，請切到背景測試完整效果。
+            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--success)', marginTop: 6, lineHeight: 1.4 }}>
+              ✓ 測試通知已從伺服器發出。應該會出現在通知列、有聲音與震動。<br />
+              若 30 秒內還沒收到，請檢查系統通知設定 / 勿擾模式。
             </div>
           )}
           {testStatus === 'denied' && (
@@ -285,9 +290,19 @@ export default function NotificationSetup({ studyId, isDemo }) {
               ⚠ 通知權限未授權。請先開啟上方每日提醒開關並允許通知權限。
             </div>
           )}
+          {testStatus === 'no-sub' && (
+            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--warning)', marginTop: 6, lineHeight: 1.4 }}>
+              ⚠ 尚未註冊推播訂閱。請先關掉每日提醒開關再重新打開，讓 App 重新向伺服器註冊。
+            </div>
+          )}
+          {testStatus === 'demo' && (
+            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 6 }}>
+              示範模式不支援真實推播測試。
+            </div>
+          )}
           {testStatus === 'failed' && (
-            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--danger)', marginTop: 6 }}>
-              ✗ 測試通知發送失敗，請檢查系統通知權限設定。
+            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--danger)', marginTop: 6, lineHeight: 1.4 }}>
+              ✗ 測試通知發送失敗。請檢查網路連線或稍後再試。
             </div>
           )}
           {justEnabled && (
