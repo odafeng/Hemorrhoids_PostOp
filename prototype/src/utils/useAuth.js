@@ -16,8 +16,9 @@ export function useAuth() {
     const studyId = session?.user?.user_metadata?.study_id;
     const role = session?.user?.user_metadata?.role || 'patient';
     const surgeryDate = session?.user?.user_metadata?.surgery_date || null;
+    const surgeonId = session?.user?.user_metadata?.surgeon_id || null;
 
-    console.info('[loadUserInfo]', { id, studyId, role, surgeryDate });
+    console.info('[loadUserInfo]', { id, studyId, role, surgeryDate, surgeonId });
 
     if (studyId) {
       setUserInfo({
@@ -26,6 +27,7 @@ export function useAuth() {
         studyId,
         role,
         surgeryDate,
+        surgeonId,
         pod: surgeryDate ? getPODFromDate(surgeryDate) : 0,
       });
 
@@ -103,6 +105,7 @@ export function useAuth() {
         studyId: info.studyId || 'DEMO-001',
         role,
         surgeryDate: null,
+        surgeonId: info.surgeonId || null,
         pod: 0,
       });
       setAuthState('loggedIn');

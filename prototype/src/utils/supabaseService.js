@@ -114,6 +114,47 @@ export async function adminResetPassword(targetEmail, newPassword) {
 }
 
 // =====================
+// Surgical records
+// =====================
+
+/**
+ * Fetch the single surgical record for a patient (null if none).
+ */
+export async function getSurgicalRecord(studyId) {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('surgical_records')
+    .select('*')
+    .eq('study_id', studyId)
+    .maybeSingle();
+  if (error) {
+    console.error('[getSurgicalRecord]', error.message);
+    return null;
+  }
+  return data;
+}
+
+/**
+ * Upsert surgical record. Caller must supply surgeon_id on payload.
+ * RLS WITH CHECK will reject cross-surgeon writes (Postgres 42501).
+ */
+export async function saveSurgicalRecord(studyId, record) {
+  if (!supabase) throw new Error('Supabase not configured');
+  const payload = {
+    ...record,
+    study_id: studyId,
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await supabase
+    .from('surgical_records')
+    .upsert(payload, { onConflict: 'study_id' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// =====================
 // Researcher onboarding (PI-only)
 // =====================
 
@@ -125,7 +166,7 @@ export async function adminResetPassword(targetEmail, newPassword) {
  * @param {string} displayName
  * @param {'researcher'|'pi'} role
  */
-export async function inviteResearcher(email, displayName, role = 'researcher') {
+export async function inviteResearcher(email, displayName, role = 'researcher', surgeonId = null) {
   if (!supabase) throw new Error('Supabase not configured');
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('未登入');
@@ -137,7 +178,7 @@ export async function inviteResearcher(email, displayName, role = 'researcher') 
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ email, display_name: displayName, role }),
+    body: JSON.stringify({ email, display_name: displayName, role, surgeon_id: surgeonId }),
   });
   const result = await resp.json();
   if (!resp.ok) throw new Error(result.error || `邀請失敗 (${resp.status})`);

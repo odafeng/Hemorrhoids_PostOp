@@ -70,6 +70,7 @@ Deno.serve(async (req: Request) => {
           email: u.email,
           display_name: u.user_metadata?.display_name || null,
           role: u.user_metadata?.role,
+          surgeon_id: u.user_metadata?.surgeon_id || null,
           invited_at: u.user_metadata?.invited_at || null,
           created_at: u.created_at,
           last_sign_in_at: u.last_sign_in_at || null,

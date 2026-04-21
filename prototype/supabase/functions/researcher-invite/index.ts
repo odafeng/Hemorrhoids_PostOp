@@ -57,6 +57,9 @@ Deno.serve(async (req: Request) => {
     const email: string = (body.email || "").trim();
     const displayName: string = (body.display_name || "").trim();
     const role: string = body.role === "pi" ? "pi" : "researcher";
+    const surgeonId: string | null = (body.surgeon_id || "").trim().toUpperCase() || null;
+
+    const SURGEONS = ["HSF", "HCW", "WJH", "CPT", "WCC", "LMH", "CYH", "FIH"];
 
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return new Response(JSON.stringify({ error: "Email 格式不正確" }), {
@@ -66,6 +69,18 @@ Deno.serve(async (req: Request) => {
     }
     if (!displayName) {
       return new Response(JSON.stringify({ error: "請輸入研究人員姓名" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (role === "researcher" && !surgeonId) {
+      return new Response(JSON.stringify({ error: "請指定研究人員所屬的主刀醫師" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (surgeonId && !SURGEONS.includes(surgeonId)) {
+      return new Response(JSON.stringify({ error: `surgeon_id ${surgeonId} 不在允許清單` }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -88,6 +103,7 @@ Deno.serve(async (req: Request) => {
       data: {
         role,
         display_name: displayName,
+        surgeon_id: surgeonId,
         invited_by: user.id,
         invited_at: new Date().toISOString(),
       },
@@ -101,12 +117,12 @@ Deno.serve(async (req: Request) => {
       action: "admin.invite_researcher",
       resource: "auth.users",
       resource_id: data.user?.id || email,
-      detail: { target_email: email, role, display_name: displayName },
+      detail: { target_email: email, role, display_name: displayName, surgeon_id: surgeonId },
     });
 
     return new Response(JSON.stringify({
       success: true,
-      user: { id: data.user?.id, email, role, display_name: displayName },
+      user: { id: data.user?.id, email, role, display_name: displayName, surgeon_id: surgeonId },
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

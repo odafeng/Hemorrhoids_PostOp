@@ -38,6 +38,7 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
   const [researcherEmail, setResearcherEmail] = useState('');
   const [researcherName, setResearcherName] = useState('');
   const [researcherRole, setResearcherRole] = useState('researcher');
+  const [researcherSurgeon, setResearcherSurgeon] = useState('HSF');
   const [researcherInviting, setResearcherInviting] = useState(false);
   const [researcherResult, setResearcherResult] = useState('');
   const [researcherError, setResearcherError] = useState('');
@@ -116,9 +117,17 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
     if (!researcherEmail.trim() || !researcherName.trim()) {
       setResearcherError('請輸入 Email 與姓名'); return;
     }
+    if (researcherRole === 'researcher' && !researcherSurgeon) {
+      setResearcherError('請選擇所屬主刀醫師'); return;
+    }
     setResearcherInviting(true);
     try {
-      await sb.inviteResearcher(researcherEmail.trim(), researcherName.trim(), researcherRole);
+      await sb.inviteResearcher(
+        researcherEmail.trim(),
+        researcherName.trim(),
+        researcherRole,
+        researcherSurgeon || null,
+      );
       setResearcherResult(`✓ 已寄出邀請信到 ${researcherEmail.trim()}`);
       setResearcherEmail('');
       setResearcherName('');
@@ -496,6 +505,25 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
               </button>
             </div>
           </div>
+          <div className="input-group">
+            <label className="input-lbl">
+              所屬主刀醫師
+              {researcherRole === 'pi' && <span style={{ color: 'var(--ink-3)', textTransform: 'none', letterSpacing: 0 }}> (選填)</span>}
+            </label>
+            <select className="input" style={{ appearance: 'auto' }}
+              value={researcherSurgeon}
+              onChange={(e) => setResearcherSurgeon(e.target.value)}>
+              {researcherRole === 'pi' && <option value="">不綁定</option>}
+              {SURGEON_PREFIXES.map(p => (
+                <option key={p} value={p}>{SURGEON_NAMES[p]}（{p}）</option>
+              ))}
+            </select>
+            <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 6, fontFamily: 'var(--font-mono)', letterSpacing: '0.04em' }}>
+              {researcherRole === 'researcher'
+                ? '此人只會看到所選醫師的病人'
+                : 'PI 不受限制；設定只影響手術紀錄的著作歸屬'}
+            </div>
+          </div>
           <button className="btn btn-primary" onClick={handleInviteResearcher} disabled={researcherInviting}>
             {researcherInviting ? '寄送中…' : <>寄出邀請信 <I.Send width={14} height={14} /></>}
           </button>
@@ -583,6 +611,12 @@ export default function ResearcherDashboard({ onNavigate, isDemo, userInfo, onLo
                           style={{ padding: '1px 7px', fontSize: 9.5, fontFamily: 'var(--font-mono)' }}>
                           {roleLabel}
                         </span>
+                        {u.surgeon_id && (
+                          <span className="chip"
+                            style={{ padding: '1px 7px', fontSize: 9.5, fontFamily: 'var(--font-mono)', background: 'var(--surface)', color: 'var(--ink-2)' }}>
+                            {u.surgeon_id}
+                          </span>
+                        )}
                         {isBanned && (
                           <span className="chip chip-danger" style={{ padding: '1px 7px', fontSize: 9.5, fontFamily: 'var(--font-mono)' }}>
                             已停用

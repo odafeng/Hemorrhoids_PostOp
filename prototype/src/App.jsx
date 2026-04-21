@@ -14,6 +14,7 @@ import IOSInstallPrompt from './components/IOSInstallPrompt';
 import UpdateBanner from './components/UpdateBanner';
 import PageErrorBoundary from './components/PageErrorBoundary';
 import ConsentPage from './pages/ConsentPage';
+import SurgicalRecord from './pages/SurgicalRecord';
 import * as I from './components/Icons';
 import { installGlobalErrorHandlers, initSentry } from './utils/errorLogger';
 import { useAuth } from './utils/useAuth';
@@ -237,6 +238,7 @@ export default function App() {
         <Route path="/review" element={<ChatReview onNavigate={(tab) => {
           navigate(tab === 'researcherDashboard' ? '/researcher' : '/review');
         }} {...commonProps} />} />
+        <Route path="/surgical-record/:studyId" element={<SurgicalRecord {...commonProps} />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

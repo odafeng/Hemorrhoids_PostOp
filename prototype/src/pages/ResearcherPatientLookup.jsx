@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as sb from '../utils/supabaseService';
 import * as I from '../components/Icons';
 
-export default function ResearcherPatientLookup({ onNavigate, isDemo }) {
+export default function ResearcherPatientLookup({ onNavigate, isDemo, userInfo }) {
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -165,6 +167,19 @@ export default function ResearcherPatientLookup({ onNavigate, isDemo }) {
                     {result.activeAlerts}
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Operative record entry */}
+            {result.patientExists && !isDemo && (
+              <div style={{
+                marginTop: 14, paddingTop: 12,
+                borderTop: '1px solid var(--line)',
+              }}>
+                <button className="btn btn-primary"
+                  onClick={() => navigate(`/surgical-record/${result.studyId}`)}>
+                  <I.Edit width={14} height={14} /> 撰寫手術紀錄
+                </button>
               </div>
             )}
 
