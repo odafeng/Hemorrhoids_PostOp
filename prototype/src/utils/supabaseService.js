@@ -316,10 +316,21 @@ export async function listStudyInvites() {
  */
 export async function getSignedSignatureUrl(pathOrUrl, expiresInSec = 300) {
   if (!pathOrUrl || !supabase) return null;
-  if (pathOrUrl.startsWith('http')) return pathOrUrl; // legacy: already a full URL
+  let objectPath = pathOrUrl;
+  if (pathOrUrl.startsWith('http')) {
+    // Legacy pre-migration rows stored full public URLs. The signatures bucket is
+    // now private, so those URLs no longer work. Extract the object path by taking
+    // everything after '/signatures/' and mint a signed URL instead.
+    const match = pathOrUrl.match(/\/signatures\/(.+)$/);
+    if (!match) {
+      console.error('[getSignedSignatureUrl] Cannot parse legacy URL:', pathOrUrl);
+      return null;
+    }
+    objectPath = match[1];
+  }
   const { data, error } = await supabase.storage
     .from('signatures')
-    .createSignedUrl(pathOrUrl, expiresInSec);
+    .createSignedUrl(objectPath, expiresInSec);
   if (error) {
     console.error('[getSignedSignatureUrl]', error.message);
     return null;

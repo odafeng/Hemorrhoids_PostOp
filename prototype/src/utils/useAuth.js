@@ -14,23 +14,27 @@ export function useAuth() {
     const id = session?.user?.id || null;
     const email = session?.user?.email || null;
     // SECURITY: read authorisation claims (role / study_id / surgeon_id)
-    // from app_metadata — user_metadata is user-writable and forgeable.
-    // Falls back to user_metadata for display-only values (surgery_date)
-    // and for first-login patients whose onboarding hasn't yet promoted.
+    // from app_metadata only — user_metadata is user-writable and forgeable.
+    // surgery_date is display-only and can come from user_metadata safely.
     const appMeta = session?.user?.app_metadata || {};
     const userMeta = session?.user?.user_metadata || {};
     const studyId = appMeta.study_id || userMeta.study_id;
-    const role = appMeta.role || userMeta.role || 'patient';
+    // Only trust app_metadata for the role claim; never fall back to
+    // user_metadata.role which a user can set to 'pi'/'researcher' themselves.
+    const role = appMeta.role || 'patient';
     const surgeonId = appMeta.surgeon_id || null;
     const surgeryDate = userMeta.surgery_date || null;
+    // Staff accounts (researcher/pi) may not have a study_id — allow them
+    // through so the router can direct them to the researcher dashboard.
+    const isStaff = role === 'researcher' || role === 'pi';
 
     console.info('[loadUserInfo]', { id, studyId, role, surgeryDate, surgeonId });
 
-    if (studyId) {
+    if (studyId || isStaff) {
       setUserInfo({
         id,
         email,
-        studyId,
+        studyId: studyId || null,
         role,
         surgeryDate,
         surgeonId,
@@ -38,12 +42,14 @@ export function useAuth() {
       });
 
       // Fire-and-forget: onboard new patient if invite token exists
-      const inviteToken = sessionStorage.getItem('invite_token');
-      if (inviteToken && role === 'patient') {
-        sessionStorage.removeItem('invite_token');
-        ensurePatient(studyId, inviteToken).catch(e =>
-          console.error('[loadUserInfo] onboard failed:', e)
-        );
+      if (studyId && role === 'patient') {
+        const inviteToken = sessionStorage.getItem('invite_token');
+        if (inviteToken) {
+          sessionStorage.removeItem('invite_token');
+          ensurePatient(studyId, inviteToken).catch(e =>
+            console.error('[loadUserInfo] onboard failed:', e)
+          );
+        }
       }
     }
   };

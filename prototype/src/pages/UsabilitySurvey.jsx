@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import * as sb from '../utils/supabaseService';
 import { getSurveyLocal, saveSurveyLocal } from '../utils/storage';
 import * as I from '../components/Icons';
@@ -15,7 +14,6 @@ const questions = [
 const scaleLabels = ['非常不同意', '不同意', '普通', '同意', '非常同意'];
 
 export default function UsabilitySurvey({ onComplete, isDemo, userInfo }) {
-  const navigate = useNavigate();
   const [answers, setAnswers] = useState({});
   const [feedback, setFeedback] = useState('');
   const [submitting, setSubmitting] = useState(false);

@@ -184,9 +184,11 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // SECURITY: promote role / study_id / surgeon_id from user_metadata
-    // to app_metadata so RLS helpers (which read app_metadata) can't be
-    // bypassed by the user editing their own metadata (Codex P1 fix).
+    // SECURITY: promote role / study_id / surgeon_id to app_metadata so RLS
+    // helpers (which read app_metadata) can't be bypassed. This MUST succeed
+    // before we consume the invite token — if it fails, return an error so
+    // the user can retry (the patient row is already created and idempotent;
+    // the next attempt will go through the existing-patient resync path).
     const { error: promoteErr } = await adminClient.auth.admin.updateUserById(user.id, {
       app_metadata: {
         ...(user.app_metadata || {}),
@@ -197,8 +199,10 @@ Deno.serve(async (req: Request) => {
     });
     if (promoteErr) {
       console.error("app_metadata promote error:", promoteErr);
-      // Do not fail onboarding — user still has patient row; JWT will pick
-      // up app_metadata on next refresh or they can log out/in.
+      return new Response(
+        JSON.stringify({ error: "帳號已建立但權限設定失敗，請重新登入或聯絡管理員" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     // Mark per-patient invite token as used (skip if global token was used)

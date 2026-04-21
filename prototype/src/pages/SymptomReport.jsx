@@ -33,10 +33,19 @@ const PAIN_COLOR = (v) => v <= 3 ? 'var(--ok)' : v <= 6 ? 'var(--warn)' : 'var(-
 
 export default function SymptomReport({ onComplete, isDemo, userInfo }) {
   const [searchParams] = useSearchParams();
-  const editDate = searchParams.get('date') || null; // YYYY-MM-DD of past report to edit
-  const isEditingPast = !!editDate && editDate !== new Date().toLocaleDateString('en-CA');
+  const today = new Date().toLocaleDateString('en-CA');
+  // Validate ?date= param: must be YYYY-MM-DD, a real calendar date, and not
+  // in the future. Reject anything else to prevent arbitrary report creation.
+  const rawDate = searchParams.get('date') || null;
+  const isValidPastDate = (d) => {
+    if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return false;
+    if (isNaN(Date.parse(d))) return false;
+    return d <= today;
+  };
+  const editDate = isValidPastDate(rawDate) ? rawDate : null;
+  const isEditingPast = !!editDate && editDate !== today;
 
-  const targetDate = editDate || new Date().toLocaleDateString('en-CA');
+  const targetDate = editDate || today;
   const calcPodForDate = (date) => {
     if (!userInfo?.surgeryDate || !date) return 0;
     const s = new Date(userInfo.surgeryDate);

@@ -90,20 +90,15 @@ Deno.serve(async (req: Request) => {
 
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Check if email already registered
-    const { data: { users }, error: listError } = await adminClient.auth.admin.listUsers();
-    if (listError) throw listError;
-    if (users.find((u) => u.email === email)) {
-      return new Response(JSON.stringify({ error: `${email} 已經註冊過` }), {
-        status: 409,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     // Send invitation email. Only cosmetic / non-security fields go into
     // user_metadata here (display_name, invited_by). Security-critical
     // claims (role, surgeon_id) are written to app_metadata below via
     // updateUserById, which is NOT writable by the user themselves.
+    //
+    // NOTE: We do NOT pre-check for duplicate emails with listUsers() because
+    // that API is paginated and a pre-check would silently miss users beyond
+    // the first page. Instead we let inviteUserByEmail fail and translate the
+    // "already registered" error into a proper 409 response.
     const { data, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
       data: {
         display_name: displayName,
@@ -111,7 +106,22 @@ Deno.serve(async (req: Request) => {
         invited_at: new Date().toISOString(),
       },
     });
-    if (inviteError) throw inviteError;
+    if (inviteError) {
+      // Supabase returns HTTP 422 (or a message containing "already") when
+      // the email is already registered in this project.
+      if (
+        inviteError.status === 422 ||
+        /already registered|already been registered|already exists/i.test(
+          inviteError.message || "",
+        )
+      ) {
+        return new Response(JSON.stringify({ error: `${email} 已經註冊過` }), {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      throw inviteError;
+    }
 
     // Set security-critical claims in app_metadata (server-controlled)
     if (data.user?.id) {

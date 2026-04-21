@@ -59,9 +59,18 @@ Deno.serve(async (req: Request) => {
     const admin = createClient(supabaseUrl, supabaseServiceKey);
 
     if (action === "list") {
-      const { data: { users }, error } = await admin.auth.admin.listUsers({ perPage: 200 });
-      if (error) throw error;
-      const researchers = users
+      // Paginate through all auth users so staff accounts beyond page 1 are
+      // not silently omitted from the team list.
+      let allUsers: { id: string; email?: string; user_metadata: Record<string, unknown>; app_metadata: Record<string, unknown>; created_at: string; last_sign_in_at?: string; [key: string]: unknown }[] = [];
+      let page = 1;
+      while (true) {
+        const { data, error } = await admin.auth.admin.listUsers({ perPage: 1000, page });
+        if (error) throw error;
+        allUsers = allUsers.concat(data.users as typeof allUsers);
+        if (data.users.length < 1000) break;
+        page++;
+      }
+      const researchers = allUsers
         .filter((u) => {
           // SECURITY: role lives in app_metadata (server-controlled).
           // Reading from user_metadata would (a) miss newly-invited
@@ -102,6 +111,23 @@ Deno.serve(async (req: Request) => {
       if (targetId === user.id) {
         return new Response(JSON.stringify({ error: "不能停用自己的帳號" }), {
           status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Verify target is a staff (researcher/pi) account — block PIs from
+      // accidentally (or maliciously) disabling patient logins via this endpoint.
+      const { data: targetData, error: targetFetchErr } = await admin.auth.admin.getUserById(targetId);
+      if (targetFetchErr || !targetData.user) {
+        return new Response(JSON.stringify({ error: "找不到指定使用者" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const targetRole = targetData.user.app_metadata?.role;
+      if (targetRole !== "researcher" && targetRole !== "pi") {
+        return new Response(JSON.stringify({ error: "此操作僅限研究員或主持人帳號" }), {
+          status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
