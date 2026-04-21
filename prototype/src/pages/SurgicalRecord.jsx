@@ -10,6 +10,12 @@ const HEM_SUBTYPES = [
   { v: 'semi_closed', label: 'Semi-closed', d: '大部分縫合，末端開放' },
 ];
 const GRADES = ['I', 'II', 'III', 'IV'];
+const ANESTHESIA_TYPES = [
+  { v: 'IVGA', label: 'IVGA', d: '靜脈全身麻醉' },
+  { v: 'LMGA', label: 'LMGA', d: '喉罩全身麻醉' },
+  { v: 'SA',   label: 'SA',   d: '脊椎麻醉' },
+  { v: 'LA',   label: 'LA',   d: '局部麻醉' },
+];
 const CLOCK_POSITIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const POSITIONS = [
   { v: 'lithotomy',       label: 'Lithotomy' },
@@ -59,6 +65,7 @@ export default function SurgicalRecord({ isDemo, userInfo }) {
   const [bloodLoss, setBloodLoss] = useState('');
   const [duration, setDuration] = useState('');
   const [position, setPosition] = useState('');
+  const [anesthesiaType, setAnesthesiaType] = useState('');
   const [selfPaid, setSelfPaid] = useState({
     hemostatic_gauze: [],
     hemostatic_gauze_other: '',
@@ -114,6 +121,7 @@ export default function SurgicalRecord({ isDemo, userInfo }) {
           setBloodLoss(rec.blood_loss_ml ?? '');
           setDuration(rec.duration_min ?? '');
           setPosition(rec.patient_position || '');
+          setAnesthesiaType(rec.anesthesia_type || '');
           if (rec.self_paid) {
             // Back-compat: legacy rows stored newepi as a boolean; promote into wound_spray group.
             const legacyNewepi = !!rec.self_paid.newepi;
@@ -209,6 +217,7 @@ export default function SurgicalRecord({ isDemo, userInfo }) {
       blood_loss_ml: bloodLoss === '' ? null : Number(bloodLoss),
       duration_min: duration === '' ? null : Number(duration),
       patient_position: position || null,
+      anesthesia_type: anesthesiaType || null,
       self_paid: cleanedSelfPaid,
       notes: notes.trim() || null,
       // Laser-only extras
@@ -583,6 +592,23 @@ export default function SurgicalRecord({ isDemo, userInfo }) {
           value={duration}
           onChange={(e) => !isReadOnly && setDuration(e.target.value)}
           disabled={isReadOnly} />
+      </div>
+
+      {/* Anesthesia type */}
+      <div className="field">
+        <div className="field-lbl">麻醉方式</div>
+        <div className="opt-row" style={{ flexWrap: 'wrap' }}>
+          {ANESTHESIA_TYPES.map((o) => (
+            <button key={o.v} type="button"
+              className={`opt ${anesthesiaType === o.v ? 'selected' : ''}`}
+              onClick={() => !isReadOnly && setAnesthesiaType(o.v)}
+              disabled={isReadOnly}
+              title={o.d}>
+              <span className="opt-main">{o.label}</span>
+              <span className="opt-desc">{o.d}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Patient position */}
