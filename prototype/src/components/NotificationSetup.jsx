@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   isNotificationSupported,
   getNotificationStatus,
@@ -26,7 +26,10 @@ export default function NotificationSetup({ studyId, isDemo }) {
   const [time, setTime] = useState(getReminderTime());
   const [justEnabled, setJustEnabled] = useState(false);
   const [pushStatus, setPushStatus] = useState(''); // '', 'subscribing', 'subscribed', 'error'
-  const [testStatus, setTestStatus] = useState(''); // '' | 'sending' | 'fired' | 'failed' | 'denied' | 'no-sub' | 'demo'
+  const [testStatus, setTestStatus] = useState(''); // '' | 'sending' | 'cooldown' | 'fired' | 'failed' | 'denied' | 'no-sub' | 'demo'
+  // Synchronous guard — React state updates are async so testStatus alone
+  // doesn't protect against a tap landing during the same event loop tick.
+  const testInFlightRef = useRef(false);
 
   // On mount: load server prefs + check existing push subscription
   useEffect(() => {
@@ -133,7 +136,11 @@ export default function NotificationSetup({ studyId, isDemo }) {
   };
 
   const handleTestNotification = async () => {
-    if (testStatus === 'sending') return; // ignore double-tap
+    // Synchronous ref guard — prevents double-submit from rapid taps even
+    // before React can re-render with testStatus='sending'. Also prevents
+    // re-firing during the post-success cooldown window.
+    if (testInFlightRef.current) return;
+
     if (isDemo) {
       setTestStatus('demo');
       setTimeout(() => setTestStatus(''), 3000);
@@ -150,20 +157,39 @@ export default function NotificationSetup({ studyId, isDemo }) {
       return;
     }
 
+    testInFlightRef.current = true;
     setTestStatus('sending');
-    // Server-sent Web Push — goes through FCM/APNs, arrives as a real system
-    // notification with sound + vibrate regardless of foreground / background.
-    // This matches the production cron path exactly (check-adherence → FCM).
-    const result = await sb.sendTestPush();
-    if (result.ok && result.sent > 0) {
-      setTestStatus('fired');
-    } else if (result.reason === 'no-subscription') {
-      setTestStatus('no-sub');
-    } else {
+    try {
+      // Server-sent Web Push — FCM (Android) / APNs (iOS), arrives as a
+      // real system notification with sound + vibrate regardless of
+      // foreground / background. Matches the production cron path.
+      const result = await sb.sendTestPush();
+      if (result.ok && result.sent > 0) {
+        setTestStatus('fired');
+        // Hold the button locked for 8 seconds after a successful fire so
+        // the user doesn't accidentally stack multiple pushes (which on
+        // iOS can pile up in notification center even with the same tag).
+        setTimeout(() => {
+          testInFlightRef.current = false;
+          setTestStatus('cooldown');
+          setTimeout(() => setTestStatus(''), 2000);
+        }, 6000);
+      } else {
+        if (result.reason === 'no-subscription') {
+          setTestStatus('no-sub');
+        } else {
+          setTestStatus('failed');
+          console.warn('[test-push] failed:', result);
+        }
+        testInFlightRef.current = false;
+        setTimeout(() => setTestStatus(''), 5000);
+      }
+    } catch (err) {
+      console.error('[test-push] exception:', err);
       setTestStatus('failed');
-      console.warn('[test-push] failed:', result);
+      testInFlightRef.current = false;
+      setTimeout(() => setTestStatus(''), 5000);
     }
-    setTimeout(() => setTestStatus(''), 6000);
   };
 
   const timeValue = `${String(time.hour).padStart(2, '0')}:${String(time.minute).padStart(2, '0')}`;
@@ -270,9 +296,13 @@ export default function NotificationSetup({ studyId, isDemo }) {
           <button
             className="btn btn-secondary notif-test-btn"
             onClick={handleTestNotification}
-            disabled={testStatus === 'sending'}
+            disabled={testStatus === 'sending' || testStatus === 'fired' || testStatus === 'cooldown'}
           >
-            {testStatus === 'sending' ? '📡 發送中…' : '🔔 測試通知'}
+            {testStatus === 'sending'
+              ? '📡 發送中…'
+              : (testStatus === 'fired' || testStatus === 'cooldown')
+                ? '✓ 已發送，請稍候'
+                : '🔔 測試通知'}
           </button>
           {testStatus === 'sending' && (
             <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.4 }}>

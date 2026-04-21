@@ -46,6 +46,7 @@ input, select, textarea { font-family: inherit; }
 
   --nav-height: 72px;
   --max-width: 430px;
+  --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
   --transition-fast: 150ms ease;
@@ -156,7 +157,7 @@ body {
 
 /* Page / view wrapper */
 .page, .view {
-  padding: 4px 20px calc(var(--nav-height) + 12px + var(--safe-bottom));
+  padding: calc(4px + var(--safe-top)) 20px calc(var(--nav-height) + 12px + var(--safe-bottom));
   min-height: 100dvh;
   animation: fadeIn 0.3s ease;
 }
@@ -1668,7 +1669,7 @@ input[type=range].slider::-moz-range-thumb {
    ============================================================ */
 .consent-view {
   min-height: 100dvh;
-  padding: 28px 22px calc(28px + env(safe-area-inset-bottom));
+  padding: calc(28px + var(--safe-top)) 22px calc(28px + env(safe-area-inset-bottom));
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-body);

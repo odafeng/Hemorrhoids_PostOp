@@ -1,4 +1,4 @@
-const CACHE_NAME = 'postop-tracker-v6';
+const CACHE_NAME = 'postop-tracker-v7';
 const STATIC_ASSETS = [
   '/icon.svg',
   '/favicon.svg',
@@ -119,21 +119,41 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      icon: payload.icon,
-      badge: payload.badge,
-      tag: payload.tag,
-      renotify: true,
-      vibrate: payload.vibrate || [200, 100, 200],
-      data: payload.data,
-      actions: [
-        { action: 'report', title: '立即填寫' },
-        { action: 'dismiss', title: '稍後' },
-      ],
-    })
-  );
+  // iOS Web Push (16.4+) doesn't reliably support `actions`; if showNotification
+  // rejects, Apple's push gateway will retry the delivery, causing duplicate
+  // notifications to stack. Wrap in try/catch and fall back to a minimal option
+  // set so the outer promise ALWAYS resolves and Apple sees the push as ACKed.
+  const fullOpts = {
+    body: payload.body,
+    icon: payload.icon,
+    badge: payload.badge,
+    tag: payload.tag,
+    vibrate: payload.vibrate || [200, 100, 200],
+    data: payload.data,
+    actions: [
+      { action: 'report', title: '立即填寫' },
+      { action: 'dismiss', title: '稍後' },
+    ],
+  };
+  const minimalOpts = {
+    body: payload.body,
+    icon: payload.icon,
+    tag: payload.tag,
+    data: payload.data,
+  };
+
+  event.waitUntil((async () => {
+    try {
+      await self.registration.showNotification(payload.title, fullOpts);
+    } catch (e) {
+      console.warn('[SW push] full showNotification failed, falling back:', e);
+      try {
+        await self.registration.showNotification(payload.title, minimalOpts);
+      } catch (e2) {
+        console.error('[SW push] minimal showNotification also failed:', e2);
+      }
+    }
+  })());
 });
 
 // =====================================================
