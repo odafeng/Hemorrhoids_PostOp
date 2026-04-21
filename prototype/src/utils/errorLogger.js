@@ -1,6 +1,4 @@
 // Production-grade error logging with Sentry + Supabase dual-write
-// Sentry: real-time alerting, stack trace aggregation, performance
-// Supabase: long-term storage, research audit trail
 
 import * as Sentry from '@sentry/react';
 
@@ -20,26 +18,24 @@ export function initSentry() {
     return;
   }
 
-  Sentry.init({
-    dsn,
-    environment: import.meta.env.MODE, // 'development' or 'production'
-    // Performance monitoring
-    tracesSampleRate: 0.2, // 20% of transactions
-    // Session replay for debugging
-    replaysSessionSampleRate: 0,
-    replaysOnErrorSampleRate: 1.0, // 100% on error
-    // Filter out noisy errors
-    beforeSend(event) {
-      // Don't send errors from demo mode
-      if (window.location.href.includes('demo')) return null;
-      return event;
-    },
-  });
+  try {
+    Sentry.init({
+      dsn,
+      environment: import.meta.env.MODE,
+      tracesSampleRate: 0.2,
+      beforeSend(event) {
+        // Skip dev mode + demo — Sentry project only stores production issues
+        if (import.meta.env.DEV) return null;
+        if (window.location.href.includes('demo')) return null;
+        return event;
+      },
+    });
+  } catch (e) {
+    _sentryInitialized = false;
+    console.warn('[Sentry] init failed (non-fatal):', e?.message || e);
+  }
 }
 
-/**
- * Severity levels
- */
 export const Severity = {
   FATAL: 'fatal',
   ERROR: 'error',
@@ -47,53 +43,92 @@ export const Severity = {
   INFO: 'info',
 };
 
+// -------- Rate limiting + re-entrancy guard --------
+// Prevents runaway logging loops that crashed the browser tab.
+const RATE_WINDOW_MS = 10_000;
+const RATE_MAX = 20;          // at most 20 logs per 10s across the whole app
+let _recentCount = 0;
+let _windowStart = 0;
+let _inLogError = false;
+let _warnedSuppressed = false;
+
+function shouldLog() {
+  const now = Date.now();
+  if (now - _windowStart > RATE_WINDOW_MS) {
+    _windowStart = now;
+    _recentCount = 0;
+    _warnedSuppressed = false;
+  }
+  if (_recentCount >= RATE_MAX) {
+    if (!_warnedSuppressed) {
+      _warnedSuppressed = true;
+      // Use raw console to avoid re-entering logError
+      // eslint-disable-next-line no-console
+      console.warn('[errorLogger] suppressing further errors in this window');
+    }
+    return false;
+  }
+  _recentCount++;
+  return true;
+}
+
 /**
- * Log a structured error — Sentry + Supabase + console
+ * Log a structured error — Sentry + Supabase + console.
+ * Never throws, never rejects, never re-enters itself.
  */
 export async function logError(error, context = {}) {
-  const severity = context.severity || Severity.ERROR;
-  const errorObj = error instanceof Error ? error : new Error(String(error));
-
-  // 1. Console (always)
-  const consoleFn = severity === Severity.FATAL || severity === Severity.ERROR
-    ? console.error : severity === Severity.WARNING ? console.warn : console.info;
-  consoleFn(`[${severity.toUpperCase()}] ${context.type || 'error'}:`, error);
-
-  // 2. Sentry (real-time alerting)
+  if (_inLogError) return;      // re-entrancy guard
+  if (!shouldLog()) return;     // rate limit
+  _inLogError = true;
   try {
-    if (_sentryInitialized) {
-      Sentry.withScope((scope) => {
-        scope.setLevel(severity);
-        scope.setTag('error_type', context.type || 'unknown');
-        if (context.component) scope.setTag('component', context.component);
-        if (context.metadata) scope.setContext('metadata', context.metadata);
-        Sentry.captureException(errorObj);
-      });
+    const severity = context.severity || Severity.ERROR;
+    let errorObj;
+    try {
+      errorObj = error instanceof Error ? error : new Error(String(error));
+    } catch {
+      errorObj = new Error('unserializable error');
     }
-  } catch {
-    // Sentry should never crash the app
-  }
 
-  // 3. Supabase (audit trail / long-term storage)
-  try {
-    const { default: supabase } = await import('./supabaseClient');
-    if (!supabase) return;
+    const consoleFn = severity === Severity.FATAL || severity === Severity.ERROR
+      ? console.error : severity === Severity.WARNING ? console.warn : console.info;
+    try {
+      consoleFn(`[${severity.toUpperCase()}] ${context.type || 'error'}:`, errorObj.message || errorObj);
+    } catch {}
 
-    await supabase.from(LOG_TABLE).insert({
-      error_message: errorObj.message,
-      error_stack: errorObj.stack || null,
-      context: JSON.stringify({
-        type: context.type || 'unknown',
-        severity,
-        component: context.component || null,
-        metadata: context.metadata || null,
-      }),
-      user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
-      url: typeof window !== 'undefined' ? window.location.href : 'unknown',
-      timestamp: new Date().toISOString(),
-    });
+    if (_sentryInitialized) {
+      try {
+        Sentry.withScope((scope) => {
+          scope.setLevel(severity);
+          scope.setTag('error_type', context.type || 'unknown');
+          if (context.component) scope.setTag('component', context.component);
+          if (context.metadata) scope.setContext('metadata', context.metadata);
+          Sentry.captureException(errorObj);
+        });
+      } catch {}
+    }
+
+    try {
+      const { default: supabase } = await import('./supabaseClient');
+      if (supabase) {
+        await supabase.from(LOG_TABLE).insert({
+          error_message: errorObj.message || '(no message)',
+          error_stack: errorObj.stack || null,
+          context: JSON.stringify({
+            type: context.type || 'unknown',
+            severity,
+            component: context.component || null,
+            metadata: context.metadata || null,
+          }),
+          user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+          url: typeof window !== 'undefined' ? window.location.href : 'unknown',
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } catch {}
   } catch {
-    // DB logging should never crash the app
+    // swallow everything — logError must NEVER throw or reject
+  } finally {
+    _inLogError = false;
   }
 }
 
@@ -106,6 +141,7 @@ export function installGlobalErrorHandlers() {
   _installed = true;
 
   window.addEventListener('error', (event) => {
+    // Fire-and-forget; logError handles its own errors internally
     logError(event.error || event.message, {
       type: 'unhandled_error',
       severity: Severity.FATAL,

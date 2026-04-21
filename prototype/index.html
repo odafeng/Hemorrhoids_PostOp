@@ -32,13 +32,36 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
 
-    <!-- Service Worker Registration -->
+    <!-- Service Worker Registration (with aggressive self-update) -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('SW registered:', reg.scope))
+            .then((reg) => {
+              console.log('SW registered:', reg.scope);
+              // Force update check on every load so new sw.js rolls out fast
+              reg.update().catch(() => {});
+              // Claim any waiting worker immediately
+              if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+              reg.addEventListener('updatefound', () => {
+                const nw = reg.installing;
+                if (!nw) return;
+                nw.addEventListener('statechange', () => {
+                  if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+                    nw.postMessage({ type: 'SKIP_WAITING' });
+                  }
+                });
+              });
+            })
             .catch(err => console.warn('SW registration failed:', err));
+
+          // When the active SW changes, reload once to pick up new bundle
+          let reloaded = false;
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (reloaded) return;
+            reloaded = true;
+            window.location.reload();
+          });
         });
       }
     </script>

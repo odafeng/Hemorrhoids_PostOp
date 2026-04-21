@@ -3,12 +3,13 @@
 
 const QUEUE_KEY = 'offline_report_queue';
 
-export function enqueueReport(studyId, pod, report) {
+export function enqueueReport(studyId, pod, report, reportDate) {
   const queue = getQueuedReports();
   queue.push({
     studyId,
     pod,
     report,
+    reportDate: reportDate || null,
     queuedAt: new Date().toISOString(),
     id: crypto.randomUUID(),
   });
@@ -46,7 +47,11 @@ export async function flushQueue(saveReportFn) {
 
   for (const item of queue) {
     try {
-      await saveReportFn(item.studyId, item.pod, item.report);
+      if (item.reportDate) {
+        await saveReportFn(item.studyId, item.pod, item.report, item.reportDate);
+      } else {
+        await saveReportFn(item.studyId, item.pod, item.report);
+      }
       removeFromQueue(item.id);
       flushed++;
     } catch {

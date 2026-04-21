@@ -1,4 +1,4 @@
-const CACHE_NAME = 'postop-tracker-v4';
+const CACHE_NAME = 'postop-tracker-v5';
 const STATIC_ASSETS = [
   '/icon.svg',
   '/favicon.svg',
@@ -36,6 +36,11 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Allow page to trigger immediate activation of a waiting worker
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting();
+});
+
 // Fetch — network-first for HTML/JS/CSS, cache-first for icons
 self.addEventListener('fetch', (event) => {
   const { request } = event;
@@ -43,6 +48,9 @@ self.addEventListener('fetch', (event) => {
 
   // Skip non-GET requests
   if (request.method !== 'GET') return;
+
+  // Cache API only supports http(s); skip chrome-extension, moz-extension, data:, etc.
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
 
   // Network-first for Supabase API calls
   if (url.hostname.includes('supabase')) {
@@ -54,17 +62,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Safe cache.put — swallow errors (e.g. unsupported schemes, quota, aborted)
+  const safePut = (req, res) => {
+    try {
+      caches.open(CACHE_NAME)
+        .then((cache) => cache.put(req, res))
+        .catch(() => {});
+    } catch {}
+  };
+
   // Network-first for navigation (HTML) and hashed assets (JS/CSS)
   if (request.mode === 'navigate' || url.pathname.startsWith('/assets/')) {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, clone);
-            });
-          }
+          if (response.ok) safePut(request, response.clone());
           return response;
         })
         .catch(() => caches.match(request))
@@ -77,12 +89,7 @@ self.addEventListener('fetch', (event) => {
     caches.match(request).then((cached) => {
       if (cached) return cached;
       return fetch(request).then((response) => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, clone);
-          });
-        }
+        if (response.ok) safePut(request, response.clone());
         return response;
       });
     })

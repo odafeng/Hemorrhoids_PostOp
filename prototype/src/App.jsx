@@ -14,6 +14,8 @@ import IOSInstallPrompt from './components/IOSInstallPrompt';
 import UpdateBanner from './components/UpdateBanner';
 import PageErrorBoundary from './components/PageErrorBoundary';
 import ConsentPage from './pages/ConsentPage';
+import SurgicalRecord from './pages/SurgicalRecord';
+import * as I from './components/Icons';
 import { installGlobalErrorHandlers, initSentry } from './utils/errorLogger';
 import { useAuth } from './utils/useAuth';
 import { getTodayReport as getLocalTodayReport } from './utils/storage';
@@ -26,16 +28,16 @@ initSentry();
 installGlobalErrorHandlers();
 
 const patientTabs = [
-  { path: '/', label: '首頁', icon: '🏠' },
-  { path: '/report', label: '回報', icon: '📋' },
-  { path: '/history', label: '紀錄', icon: '📊' },
-  { path: '/chat', label: 'AI 衛教', icon: '💬' },
+  { path: '/', label: '首頁', Icon: I.Home },
+  { path: '/report', label: '回報', Icon: I.Clipboard },
+  { path: '/history', label: '紀錄', Icon: I.Chart },
+  { path: '/chat', label: 'AI 衛教', Icon: I.Message },
 ];
 
 const researcherTabs = [
-  { path: '/researcher', label: '概覽', icon: '📊' },
-  { path: '/lookup', label: '查詢', icon: '🔍' },
-  { path: '/review', label: '審核', icon: '📝' },
+  { path: '/researcher', label: '概覽', Icon: I.Chart },
+  { path: '/lookup', label: '查詢', Icon: I.Search },
+  { path: '/review', label: '審核', Icon: I.Message },
 ];
 
 export default function App() {
@@ -48,7 +50,16 @@ export default function App() {
 
   const [refreshKey, setRefreshKey] = useState(0);
   const [showUpdateBanner, setShowUpdateBanner] = useState(false);
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  const [theme, setTheme] = useState(() => {
+    // One-time migration for clinical redesign: reset preference to light
+    const UI_VERSION = 'clinical-v1';
+    if (localStorage.getItem('ui-version') !== UI_VERSION) {
+      localStorage.setItem('ui-version', UI_VERSION);
+      localStorage.setItem('theme', 'light');
+      return 'light';
+    }
+    return localStorage.getItem('theme') || 'light';
+  });
   const [consentChecked, setConsentChecked] = useState(false);
   const [consentSigned, setConsentSigned] = useState(true); // default true to avoid flash
 
@@ -129,6 +140,19 @@ export default function App() {
     onSyncSurgeryDate: syncSurgeryDate,
   };
 
+  // Dev-only visual preview for Consent page (no real save, no auth required)
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('previewConsent') === '1') {
+    return (
+      <ConsentPage
+        userInfo={{ studyId: 'HSF-003' }}
+        onConsent={() => {
+          alert('[Preview] 簽名已擷取，未寫入 Supabase。移除 URL 的 ?previewConsent=1 回到正常流程。');
+        }}
+        onDecline={() => { window.location.href = window.location.pathname; }}
+      />
+    );
+  }
+
   // Loading state
   if (authState === 'loading') {
     return (
@@ -158,7 +182,13 @@ export default function App() {
   }
 
   if (authState === 'loggedOut') {
-    return <Login onLogin={(info) => handleLogin(info, navigate)} />;
+    return (
+      <Login
+        onLogin={(info) => handleLogin(info, navigate)}
+        theme={theme}
+        onToggleTheme={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+      />
+    );
   }
 
   // Consent gate — patients must sign before using the app
@@ -208,6 +238,7 @@ export default function App() {
         <Route path="/review" element={<ChatReview onNavigate={(tab) => {
           navigate(tab === 'researcherDashboard' ? '/researcher' : '/review');
         }} {...commonProps} />} />
+        <Route path="/surgical-record/:studyId" element={<SurgicalRecord {...commonProps} />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -218,14 +249,13 @@ export default function App() {
           <NavLink key={tab.path} to={tab.path}
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
             end={tab.path === '/' || tab.path === '/researcher'}>
-            <span className="nav-icon">{tab.icon}</span>
+            <tab.Icon />
             <span>{tab.label}</span>
           </NavLink>
         ))}
         <button className="nav-item" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontFamily: 'inherit' }}
           aria-label="切換主題">
-          <span className="nav-icon">{theme === 'dark' ? '☀️' : '🌙'}</span>
+          {theme === 'dark' ? <I.Sun /> : <I.Moon />}
           <span>{theme === 'dark' ? '淺色' : '深色'}</span>
         </button>
       </nav>

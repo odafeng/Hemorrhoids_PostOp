@@ -5,12 +5,17 @@ import { markNotificationRead } from '../utils/supabaseService';
 import { isWoundNormal, formatWound } from '../utils/schemaContract';
 import NotificationSetup from '../components/NotificationSetup';
 import DebugPanel from '../components/DebugPanel';
+import * as I from '../components/Icons';
+
+const PAIN_TONE = (v) => v == null ? '' : v <= 3 ? 'ok' : v <= 6 ? 'warn' : 'danger';
+const PAIN_WORD = (v) => v == null ? '—' : v === 0 ? '無痛' : v <= 3 ? '輕度' : v <= 6 ? '中度' : v <= 8 ? '嚴重' : '劇烈';
+
+const PHASE = (pod) => pod === 0 ? '手術當日' : pod <= 3 ? '急性期' : pod <= 7 ? '早期恢復' : pod <= 14 ? '中期恢復' : '後期追蹤';
 
 export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout, onSyncSurgeryDate }) {
   const { data, isLoading, error, refetch, isFetching } = useDashboardData(isDemo, userInfo);
   const queryClient = useQueryClient();
 
-  // Sync authoritative surgery_date from DB back to userInfo
   useEffect(() => {
     if (data?.surgeryDate && onSyncSurgeryDate) {
       onSyncSurgeryDate(data.surgeryDate);
@@ -23,16 +28,10 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout, onSy
     refetch();
   };
 
-  const getPainColor = (pain) => {
-    if (pain <= 3) return 'var(--success)';
-    if (pain <= 6) return 'var(--warning)';
-    return 'var(--danger)';
-  };
-
   if (isLoading) {
     return (
       <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-        <p style={{ color: 'var(--text-secondary)', animation: 'pulse 1s infinite' }}>載入中...</p>
+        <p style={{ color: 'var(--ink-2)', animation: 'pulse 1s infinite', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>載入中…</p>
       </div>
     );
   }
@@ -41,25 +40,25 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout, onSy
     const isMissingPatient = error.message?.includes('MISSING_PATIENT') || error.message?.includes('MISSING_SURGERY_DATE');
     return (
       <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-        <div style={{ textAlign: 'center', maxWidth: '320px' }}>
-          <div style={{ fontSize: '2rem', marginBottom: 'var(--space-md)' }}>{isMissingPatient ? '🔄' : '❌'}</div>
-          <p style={{ color: 'var(--danger)', marginBottom: 'var(--space-sm)' }}>
-            {isMissingPatient ? '尚未完成病人資料同步' : '載入失敗'}
-          </p>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-sm)' }}>
-            {isMissingPatient
-              ? '請重新登入或聯絡研究團隊。'
-              : error.message}
-          </p>
-          <button className="btn btn-secondary" style={{ marginTop: 'var(--space-md)' }} onClick={onLogout}>
-            重新登入
-          </button>
-
-          {/* Diagnostic info — always visible for debugging */}
+        <div style={{ textAlign: 'center', maxWidth: 320 }}>
           <div style={{
-            marginTop: 'var(--space-lg)', padding: '8px', borderRadius: '6px',
-            background: 'var(--bg-glass)', border: '1px solid var(--border)',
-            fontSize: '10px', fontFamily: 'monospace', color: 'var(--text-muted)',
+            width: 56, height: 56, borderRadius: '50%',
+            background: 'var(--danger-soft)', color: 'var(--danger)',
+            display: 'grid', placeItems: 'center', margin: '0 auto var(--space-md)',
+          }}>
+            <I.Alert width={24} height={24} />
+          </div>
+          <h2 className="page-title" style={{ fontSize: 18, marginBottom: 4 }}>
+            {isMissingPatient ? '尚未完成病人資料同步' : '載入失敗'}
+          </h2>
+          <p style={{ color: 'var(--ink-2)', fontSize: 12.5, marginBottom: 'var(--space-md)' }}>
+            {isMissingPatient ? '請重新登入或聯絡研究團隊。' : error.message}
+          </p>
+          <button className="btn btn-secondary" onClick={onLogout}>重新登入</button>
+          <div style={{
+            marginTop: 'var(--space-lg)', padding: 10, borderRadius: 8,
+            background: 'var(--surface-2)', border: '1px solid var(--line)',
+            fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--ink-3)',
             textAlign: 'left', lineHeight: 1.6, wordBreak: 'break-all',
           }}>
             <div>study_id: {userInfo?.studyId || '(null)'}</div>
@@ -67,7 +66,6 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout, onSy
             <div>surgeryDate: {userInfo?.surgeryDate || '(null)'}</div>
             <div>error: {error.message?.substring(0, 120)}</div>
           </div>
-
           <DebugPanel userInfo={userInfo} isDemo={isDemo} />
         </div>
       </div>
@@ -75,12 +73,7 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout, onSy
   }
 
   const { pod, surgeryDate, todayReport, allReports, alerts, adherence, surveyDone, pendingNotifs } = data;
-
-  const latestPain = allReports.length > 0
-    ? (allReports[0]?.pain_nrs ?? allReports[0]?.pain ?? null)
-    : null;
-
-  // Normalize today report fields
+  const latestPain = allReports.length > 0 ? (allReports[0]?.pain_nrs ?? allReports[0]?.pain ?? null) : null;
   const todayPain = todayReport?.pain_nrs ?? todayReport?.pain ?? null;
   const todayBleeding = todayReport?.bleeding;
   const todayBowel = todayReport?.bowel;
@@ -91,238 +84,226 @@ export default function Dashboard({ onNavigate, isDemo, userInfo, onLogout, onSy
 
   return (
     <div className="page">
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-          <img src="/KSVGH.png" alt="" style={{ width: '36px', height: '36px', objectFit: 'contain', borderRadius: '50%' }} />
-          <div>
-            <h1 className="page-title" style={{ fontSize: 'var(--font-base)' }}>術後追蹤系統</h1>
-            <p className="page-subtitle" style={{ fontSize: 'var(--font-xs)' }}>
-              手術日期：{surgeryDate}
-              {isDemo && <span style={{ color: 'var(--warning)', marginLeft: '8px' }}>（Demo）</span>}
-            </p>
+      {/* Topbar */}
+      <div className="topbar">
+        <div className="brand">
+          <div className="brand-mark">
+            <img src="/KSVGH.png" alt="KSVGH" />
+          </div>
+          <div className="brand-text">
+            <div className="hospital">KSVGH · CRS{isDemo && ' · DEMO'}</div>
+            <div className="system">術後追蹤系統</div>
           </div>
         </div>
-        <button
-          onClick={onLogout}
-          style={{
-            background: 'var(--bg-glass)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-sm)',
-            color: 'var(--text-muted)',
-            fontSize: 'var(--font-xs)',
-            padding: '4px 10px',
-            cursor: 'pointer',
-            fontFamily: 'var(--font-family)',
-          }}
-        >
-          登出
+        <button className="icon-btn" onClick={onLogout} aria-label="登出">
+          <I.LogOut width={17} height={17} />
         </button>
       </div>
 
-      {/* POD Counter */}
-      <div className="card delay-1" style={{ textAlign: 'center' }}>
-        <div style={{
-          fontSize: '0.75rem', color: 'var(--text-muted)',
-          textTransform: 'uppercase', letterSpacing: '2px', marginBottom: 'var(--space-sm)',
-        }}>術後天數</div>
-        <div className="card-value" style={{ fontSize: '4rem', letterSpacing: '-2px' }}>{pod === 0 ? 'OP' : pod}</div>
-        <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-secondary)', marginTop: '4px' }}>{pod === 0 ? '手術當日' : `POD ${pod}`}</div>
-      </div>
-
-      {/* Survey prompt — show when POD >= 14 */}
-      {pod >= 14 && !surveyDone && (
-        <div className="card delay-1" style={{ borderColor: 'var(--accent)', borderWidth: '1.5px' }}>
-          <div className="card-header">
-            <div className="card-icon accent">📝</div>
-            <div>
-              <div className="card-title">系統可用性問卷</div>
-              <span className="status-badge pending">● 待填寫</span>
+      {/* POD hero */}
+      <div className="pod-hero">
+        <div className="pod-hero-row">
+          <div>
+            <div className="eyebrow" style={{ marginBottom: 6 }}>術後天數 · POST-OP DAY</div>
+            <div className="pod-number">{pod === 0 ? 'OP' : pod}</div>
+          </div>
+          <div className="pod-meta">
+            <div className="pod-meta-lbl">Surgery Date</div>
+            <div className="pod-meta-val">{surgeryDate}</div>
+            <div style={{ marginTop: 10 }}>
+              <span className="pod-phase-tag">
+                <I.Sparkle width={11} height={11} />
+                {PHASE(pod)}
+              </span>
             </div>
           </div>
-          <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--space-md)' }}>
+        </div>
+        <div className="pod-ruler">
+          {Array.from({ length: 14 }).map((_, i) => {
+            const cls = i < pod ? 'filled' : i === pod ? 'today' : '';
+            return <span key={i} className={cls} />;
+          })}
+        </div>
+        <div className="pod-caption">
+          <I.Info width={14} height={14} />
+          <span>每日回報幫助醫療團隊掌握您的恢復狀況</span>
+        </div>
+      </div>
+
+      {/* Survey prompt */}
+      {pod >= 14 && !surveyDone && (
+        <div className="card">
+          <div className="card-head">
+            <div className="card-head-left">
+              <div className="card-icon accent"><I.Edit width={14} height={14} /></div>
+              <div>
+                <div className="card-kicker">Usability</div>
+                <div className="card-title">系統可用性問卷</div>
+              </div>
+            </div>
+            <span className="badge pending">待填寫</span>
+          </div>
+          <p style={{ fontSize: 12.5, color: 'var(--ink-2)', marginBottom: 12, lineHeight: 1.55 }}>
             您已使用系統超過 14 天，請花 1 分鐘填寫可用性問卷，幫助我們改善系統。
           </p>
           <button className="btn btn-primary" onClick={() => onNavigate('survey')}>
-            填寫問卷
+            填寫問卷 <I.Chevron width={14} height={14} />
           </button>
         </div>
       )}
       {pod >= 14 && surveyDone && (
-        <div className="card delay-1" style={{ opacity: 0.7 }}>
-          <div className="card-header" style={{ marginBottom: 0 }}>
-            <div className="card-icon success">📝</div>
-            <div>
+        <div className="card sunk" style={{ opacity: 0.8 }}>
+          <div className="card-head" style={{ marginBottom: 0 }}>
+            <div className="card-head-left">
+              <div className="card-icon ok"><I.Check width={14} height={14} /></div>
               <div className="card-title">系統可用性問卷</div>
-              <span className="status-badge completed">✓ 已完成</span>
             </div>
+            <span className="badge done">已完成</span>
           </div>
         </div>
       )}
 
-      {/* Pending Notifications (from server-driven adherence check) */}
+      {/* Pending notifications */}
       {pendingNotifs && pendingNotifs.length > 0 && pendingNotifs.map(n => (
         <div key={n.id} className="alert-banner warning" style={{ position: 'relative' }}>
-          <span className="alert-icon">📬</span>
-          <div className="alert-content">
-            <div className="alert-title">{n.title}</div>
-            <div className="alert-message">{n.message}</div>
-            <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+          <div className="al-icon"><I.Bell width={18} height={18} /></div>
+          <div>
+            <div className="al-title">{n.title}</div>
+            <div className="al-msg">{n.message}</div>
+            <div style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
               {new Date(n.created_at).toLocaleString('zh-TW')}
             </div>
           </div>
           <button
-            onClick={async () => {
-              await markNotificationRead(n.id);
-              refetch();
-            }}
+            onClick={async () => { await markNotificationRead(n.id); refetch(); }}
             style={{
-              position: 'absolute', top: '8px', right: '8px',
-              background: 'none', border: 'none', color: 'var(--text-muted)',
-              cursor: 'pointer', fontSize: '14px', padding: '2px',
+              position: 'absolute', top: 8, right: 8,
+              background: 'none', border: 'none', color: 'var(--ink-3)',
+              cursor: 'pointer', padding: 4,
             }}
             aria-label="dismiss"
-          >✕</button>
+          ><I.Close width={14} height={14} /></button>
         </div>
       ))}
 
       {/* Alerts */}
       {alerts.map(alert => (
-        <div key={alert.id} className={`alert-banner ${alert.type}`}>
-          <span className="alert-icon">{alert.icon}</span>
-          <div className="alert-content">
-            <div className="alert-title">{alert.title}</div>
-            <div className="alert-message">{alert.message}</div>
+        <div key={alert.id} className={`alert-banner ${alert.type === 'warning' ? '' : alert.type}`}>
+          <div className="al-icon"><I.Alert width={18} height={18} /></div>
+          <div>
+            <div className="al-title">{alert.title}</div>
+            <div className="al-msg">{alert.message}</div>
           </div>
         </div>
       ))}
 
-      {/* Today's status */}
-      <div className="card delay-2">
-        <div className="card-header">
-          <div className="card-icon accent">📋</div>
-          <div>
-            <div className="card-title">今日回報</div>
-            {todayReport ? (
-              <span className="status-badge completed">✓ 已完成</span>
-            ) : (
-              <span className="status-badge pending">● 待填寫</span>
-            )}
+      {/* Today's report */}
+      <div className="card">
+        <div className="card-head">
+          <div className="card-head-left">
+            <div className="card-icon"><I.Clipboard width={14} height={14} /></div>
+            <div>
+              <div className="card-kicker">Today · 今日回報</div>
+              <div className="card-title">{todayReport ? '已完成今日回報' : '尚未填寫今日回報'}</div>
+            </div>
           </div>
+          <span className={`badge ${todayReport ? 'done' : 'pending'}`}>
+            {todayReport ? '已完成' : '待填寫'}
+          </span>
         </div>
-        {!todayReport && (
+
+        {!todayReport ? (
           <button className="btn btn-primary" onClick={() => onNavigate('report')}>
-            填寫今日症狀回報
+            填寫今日症狀回報 <I.Chevron width={16} height={16} />
           </button>
-        )}
-        {todayReport && (
-          <div>
-            <div className="symptom-row">
-              <span className="symptom-name">疼痛分數</span>
-              <span className="symptom-value" style={{ color: getPainColor(todayPain) }}>
-                {todayPain}/10
-              </span>
-            </div>
-            <div className="symptom-row">
-              <span className="symptom-name">出血</span>
-              <span className={`symptom-value ${todayBleeding === '持續' || todayBleeding === '血塊' ? 'danger' : ''}`}>
-                {todayBleeding}
-              </span>
-            </div>
-            <div className="symptom-row">
-              <span className="symptom-name">排便</span>
-              <span className={`symptom-value ${todayBowel === '未排' ? 'warning' : ''}`}>
-                {todayBowel}
-              </span>
-            </div>
-            <div className="symptom-row">
-              <span className="symptom-name">發燒</span>
-              <span className={`symptom-value ${todayFever ? 'danger' : ''}`}>
-                {todayFever ? '是' : '否'}
-              </span>
-            </div>
-            {todayWound && !isWoundNormal(todayWound) && (
-              <div className="symptom-row">
-                <span className="symptom-name">傷口</span>
-                <span className="symptom-value warning">{formatWound(todayWound)}</span>
+        ) : (
+          <>
+            <div className="sym-list">
+              <div className="sym-row">
+                <span className="sym-name">疼痛分數</span>
+                <span className={`sym-val ${PAIN_TONE(todayPain)}`}>{todayPain}<span className="unit">/10</span></span>
               </div>
-            )}
-            {todayUrinary && todayUrinary !== '正常' && (
-              <div className="symptom-row">
-                <span className="symptom-name">排尿</span>
-                <span className={`symptom-value ${todayUrinary === '尿不出來' ? 'danger' : 'warning'}`}>
-                  {todayUrinary}
+              <div className="sym-row">
+                <span className="sym-name">出血</span>
+                <span className={`sym-val ${todayBleeding === '持續' || todayBleeding === '血塊' ? 'danger' : todayBleeding === '少量' ? 'warn' : 'ok'}`}>
+                  {todayBleeding}
                 </span>
               </div>
-            )}
-            {todayContinence && todayContinence !== '正常' && (
-              <div className="symptom-row">
-                <span className="symptom-name">控便</span>
-                <span className={`symptom-value ${todayContinence === '失禁' ? 'danger' : 'warning'}`}>
-                  {todayContinence}
-                </span>
+              <div className="sym-row">
+                <span className="sym-name">排便</span>
+                <span className={`sym-val ${todayBowel === '未排' ? 'warn' : 'ok'}`}>{todayBowel}</span>
               </div>
-            )}
-            <button
-              className="btn btn-secondary"
-              style={{ marginTop: 'var(--space-sm)', width: '100%', fontSize: 'var(--font-xs)', opacity: 0.8 }}
-              onClick={() => onNavigate('report')}
-            >
-              ✏️ 修改今日回報
+              <div className="sym-row">
+                <span className="sym-name">發燒</span>
+                <span className={`sym-val ${todayFever ? 'danger' : 'ok'}`}>{todayFever ? '是' : '否'}</span>
+              </div>
+              {todayWound && !isWoundNormal(todayWound) && (
+                <div className="sym-row">
+                  <span className="sym-name">傷口</span>
+                  <span className="sym-val warn">{formatWound(todayWound)}</span>
+                </div>
+              )}
+              {todayUrinary && todayUrinary !== '正常' && (
+                <div className="sym-row">
+                  <span className="sym-name">排尿</span>
+                  <span className={`sym-val ${todayUrinary === '尿不出來' ? 'danger' : 'warn'}`}>{todayUrinary}</span>
+                </div>
+              )}
+              {todayContinence && todayContinence !== '正常' && (
+                <div className="sym-row">
+                  <span className="sym-name">控便</span>
+                  <span className={`sym-val ${todayContinence === '失禁' ? 'danger' : 'warn'}`}>{todayContinence}</span>
+                </div>
+              )}
+            </div>
+            <button className="btn btn-ghost" style={{ marginTop: 10 }} onClick={() => onNavigate('report')}>
+              <I.Edit width={14} height={14} /> 修改今日回報
             </button>
-          </div>
+          </>
         )}
       </div>
 
-      {/* Stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
-        <div className="card delay-3" style={{ marginBottom: 0 }}>
-          <div className="card-header">
-            <div className="card-icon cyan">📊</div>
-            <div className="card-title" style={{ fontSize: 'var(--font-sm)' }}>回報率</div>
+      {/* Stats */}
+      <div className="stat-grid">
+        <div className="stat-card">
+          <div className="stat-lbl">Adherence · 回報率</div>
+          <div className="stat-val">{adherence}<span className="sub">%</span></div>
+          <div className={`stat-foot ${adherence >= 90 ? 'ok' : 'warn'}`}>
+            {adherence >= 90 ? '優於同期' : '可再努力'}
           </div>
-          <div className="card-value" style={{ fontSize: 'var(--font-2xl)' }}>{adherence}%</div>
         </div>
-        <div className="card delay-4" style={{ marginBottom: 0 }}>
-          <div className="card-header">
-            <div className="card-icon" style={{ background: latestPain !== null ? `${getPainColor(latestPain)}20` : 'var(--accent-dim)' }}>
-              {latestPain !== null && latestPain >= 7 ? '😣' : latestPain !== null && latestPain >= 4 ? '😐' : '😊'}
-            </div>
-            <div className="card-title" style={{ fontSize: 'var(--font-sm)' }}>最新疼痛</div>
+        <div className="stat-card">
+          <div className="stat-lbl">Latest Pain · 最新疼痛</div>
+          <div className="stat-val" style={{ color: latestPain != null ? `var(--${PAIN_TONE(latestPain) === 'ok' ? 'ok' : PAIN_TONE(latestPain) === 'warn' ? 'warn' : 'danger'})` : 'var(--ink-3)' }}>
+            {latestPain != null ? latestPain : '—'}<span className="sub">{latestPain != null ? '/10' : ''}</span>
           </div>
-          <div className="card-value" style={{
-            fontSize: 'var(--font-2xl)',
-            color: latestPain !== null ? getPainColor(latestPain) : 'var(--text-muted)',
-          }}>
-            {latestPain !== null ? `${latestPain}/10` : '—'}
-          </div>
+          <div className={`stat-foot ${PAIN_TONE(latestPain)}`}>{PAIN_WORD(latestPain)}</div>
         </div>
       </div>
 
       {/* Quick actions */}
-      <div className="card delay-5" style={{ marginTop: 'var(--space-md)' }}>
-        <div className="card-header">
-          <div className="card-icon success">💡</div>
-          <div className="card-title">快捷功能</div>
+      <div className="card">
+        <div className="card-head">
+          <div className="card-head-left">
+            <div className="card-icon"><I.Sparkle width={14} height={14} /></div>
+            <div className="card-title">快捷功能</div>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-          <button className="btn btn-secondary" style={{ flex: 1, whiteSpace: 'nowrap' }} onClick={() => onNavigate('history')}>📊 紀錄</button>
-          <button className="btn btn-secondary" style={{ flex: 1, whiteSpace: 'nowrap' }} onClick={() => onNavigate('chat')}>💬 AI 衛教</button>
+        <div className="btn-row">
+          <button className="btn btn-secondary" onClick={() => onNavigate('history')}>
+            <I.Chart width={14} height={14} /> 歷史紀錄
+          </button>
+          <button className="btn btn-secondary" onClick={() => onNavigate('chat')}>
+            <I.Message width={14} height={14} /> AI 衛教
+          </button>
         </div>
-        <button
-          className="btn btn-secondary"
-          style={{ marginTop: 'var(--space-sm)', width: '100%', opacity: isFetching ? 0.6 : 1 }}
-          onClick={handleSync}
-          disabled={isFetching}
-        >
-          {isFetching ? '同步中...' : '🔄 重新同步資料'}
+        <button className="btn btn-ghost" style={{ marginTop: 8 }}
+          onClick={handleSync} disabled={isFetching}>
+          <I.Refresh width={14} height={14} /> {isFetching ? '同步中…' : '重新同步資料'}
         </button>
       </div>
 
-      {/* Notification Settings */}
       <NotificationSetup studyId={userInfo?.studyId} isDemo={isDemo} />
-
-      {/* Dev-only diagnostics for PWA vs web consistency */}
       <DebugPanel userInfo={userInfo} isDemo={isDemo} />
     </div>
   );

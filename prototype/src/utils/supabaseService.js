@@ -113,11 +113,238 @@ export async function adminResetPassword(targetEmail, newPassword) {
   return result;
 }
 
+// =====================
+// Surgical records
+// =====================
+
+/**
+ * Fetch the single surgical record for a patient (null if none).
+ */
+export async function getSurgicalRecord(studyId) {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('surgical_records')
+    .select('*')
+    .eq('study_id', studyId)
+    .maybeSingle();
+  if (error) {
+    console.error('[getSurgicalRecord]', error.message);
+    return null;
+  }
+  return data;
+}
+
+/**
+ * Upsert surgical record. Caller must supply surgeon_id on payload.
+ * RLS WITH CHECK will reject cross-surgeon writes (Postgres 42501).
+ */
+export async function saveSurgicalRecord(studyId, record) {
+  if (!supabase) throw new Error('Supabase not configured');
+  const payload = {
+    ...record,
+    study_id: studyId,
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await supabase
+    .from('surgical_records')
+    .upsert(payload, { onConflict: 'study_id' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// =====================
+// Researcher onboarding (PI-only)
+// =====================
+
+/**
+ * PI invites a new researcher (or another PI) by email.
+ * Calls the researcher-invite Edge Function which uses service_role to
+ * create the auth.users row + send an invitation email with set-password link.
+ * @param {string} email
+ * @param {string} displayName
+ * @param {'researcher'|'pi'} role
+ */
+export async function inviteResearcher(email, displayName, role = 'researcher', surgeonId = null) {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('未登入');
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const resp = await fetch(`${supabaseUrl}/functions/v1/researcher-invite`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ email, display_name: displayName, role, surgeon_id: surgeonId }),
+  });
+  const result = await resp.json();
+  if (!resp.ok) throw new Error(result.error || `邀請失敗 (${resp.status})`);
+  return result;
+}
+
+/**
+ * PI-only: list all researchers and PIs.
+ * Returns [{ id, email, display_name, role, invited_at, created_at, last_sign_in_at, banned_until }]
+ */
+export async function listResearchers() {
+  return await callResearcherManage({ action: 'list' }).then(r => r.users || []);
+}
+
+/**
+ * PI-only: ban a researcher/PI user (disable their login).
+ */
+export async function banResearcher(userId) {
+  return await callResearcherManage({ action: 'ban', user_id: userId });
+}
+
+/**
+ * PI-only: unban (re-enable) a researcher/PI user.
+ */
+export async function unbanResearcher(userId) {
+  return await callResearcherManage({ action: 'unban', user_id: userId });
+}
+
+async function callResearcherManage(body) {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('未登入');
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/researcher-manage`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const result = await resp.json();
+  if (!resp.ok) throw new Error(result.error || `管理失敗 (${resp.status})`);
+  return result;
+}
+
+// =====================
+// Invite management (researcher-only)
+// =====================
+
+/**
+ * Generate a 6-uppercase-letter invite token (patient-friendly, easy to type).
+ * 26^6 ≈ 308M combinations — collision risk is negligible for this study size.
+ */
+function generateInviteToken() {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => alphabet[b % 26]).join('');
+}
+
+/**
+ * Create a new study invite.
+ * @param {string} studyId   e.g. "HSF-042"
+ * @param {number} expiresInDays  default 30
+ * @returns {Promise<{study_id, invite_token, expires_at, status}>}
+ */
+export async function createStudyInvite(studyId, expiresInDays = 30) {
+  if (!supabase) throw new Error('Supabase not configured');
+  const token = generateInviteToken();
+  const expires = new Date();
+  expires.setDate(expires.getDate() + expiresInDays);
+
+  // Check existing invite for this study_id
+  const { data: existing } = await supabase
+    .from('study_invites')
+    .select('status')
+    .eq('study_id', studyId)
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.status === 'used') {
+      throw new Error(`${studyId} 已經被使用過一次，不能重新產生邀請碼`);
+    }
+    // Unused / expired: replace the old token so patient gets a fresh one
+    const { data, error } = await supabase
+      .from('study_invites')
+      .update({
+        invite_token: token,
+        status: 'pending',
+        expires_at: expires.toISOString(),
+      })
+      .eq('study_id', studyId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  const { data, error } = await supabase
+    .from('study_invites')
+    .insert({
+      study_id: studyId,
+      invite_token: token,
+      status: 'pending',
+      expires_at: expires.toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * List all study invites (researcher view)
+ */
+export async function listStudyInvites() {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('study_invites')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('[listStudyInvites]', error.message);
+    return [];
+  }
+  return data || [];
+}
+
+/**
+ * Mint a short-lived signed URL for a signature object.
+ * Accepts either a storage path (new format, "consent/HSF-001_...png")
+ * or a full public URL (legacy pre-migration rows). Returns null on failure.
+ */
+export async function getSignedSignatureUrl(pathOrUrl, expiresInSec = 300) {
+  if (!pathOrUrl || !supabase) return null;
+  let objectPath = pathOrUrl;
+  if (pathOrUrl.startsWith('http')) {
+    // Legacy pre-migration rows stored full public URLs. The signatures bucket is
+    // now private, so those URLs no longer work. Extract the object path by taking
+    // everything after '/signatures/' and mint a signed URL instead.
+    const match = pathOrUrl.match(/\/signatures\/(.+)$/);
+    if (!match) {
+      console.error('[getSignedSignatureUrl] Cannot parse legacy URL:', pathOrUrl);
+      return null;
+    }
+    objectPath = match[1];
+  }
+  const { data, error } = await supabase.storage
+    .from('signatures')
+    .createSignedUrl(objectPath, expiresInSec);
+  if (error) {
+    console.error('[getSignedSignatureUrl]', error.message);
+    return null;
+  }
+  return data?.signedUrl || null;
+}
+
 /**
  * Record patient consent — updates patients table with consent status + signature URL
  */
 export async function recordConsent(studyId, signatureDataUrl) {
-  // Upload signature image to Supabase Storage
+  // Upload signature image to Supabase Storage (private bucket; RLS-gated)
+  // Store the file PATH (not a public URL) — consumers mint short-lived
+  // signed URLs on demand via getSignedSignatureUrl().
   let signatureUrl = null;
   if (signatureDataUrl) {
     const blob = await (await fetch(signatureDataUrl)).blob();
@@ -126,8 +353,10 @@ export async function recordConsent(studyId, signatureDataUrl) {
       .from('signatures')
       .upload(fileName, blob, { contentType: 'image/png', upsert: true });
     if (!uploadError) {
-      const { data: urlData } = supabase.storage.from('signatures').getPublicUrl(fileName);
-      signatureUrl = urlData?.publicUrl || null;
+      // Persist the object path; PI-side review UI calls getSignedSignatureUrl().
+      signatureUrl = fileName;
+    } else {
+      console.error('[recordConsent] signature upload failed:', uploadError.message);
     }
   }
 
@@ -212,21 +441,25 @@ export async function getAllReports(studyId) {
 
 export async function getTodayReport(studyId) {
   const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local timezone
+  return getReportByDate(studyId, today);
+}
+
+export async function getReportByDate(studyId, reportDate) {
   const { data, error } = await supabase
     .from('symptom_reports')
     .select('*')
     .eq('study_id', studyId)
-    .eq('report_date', today)
+    .eq('report_date', reportDate)
     .maybeSingle();
   if (error) return null;
   return data;
 }
 
-export async function saveReport(studyId, pod, report) {
-  const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local timezone
+export async function saveReport(studyId, pod, report, reportDate) {
+  const date = reportDate || new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local timezone
   const payload = {
     study_id: studyId,
-    report_date: today,
+    report_date: date,
     pod: pod,
     pain_nrs: report.pain,
     bleeding: report.bleeding,
@@ -238,7 +471,7 @@ export async function saveReport(studyId, pod, report) {
     report_source: 'app',
   };
 
-  console.log('[saveReport] start', { studyId, today, pod });
+  console.log('[saveReport] start', { studyId, date, pod });
 
   const { data, error } = await supabase
     .from('symptom_reports')

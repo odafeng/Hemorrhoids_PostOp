@@ -1,50 +1,63 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as sb from '../utils/supabaseService';
+import * as I from '../components/Icons';
 
-export default function ResearcherPatientLookup({ onNavigate, isDemo, userInfo, onLogout }) {
+export default function ResearcherPatientLookup({ onNavigate, isDemo, userInfo }) {
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Password reset state
   const [resetEmail, setResetEmail] = useState('');
-  const [resetPassword, setResetPassword] = useState('');
+  const [resetPwd, setResetPwd] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
   const [resetMsg, setResetMsg] = useState('');
+  const [showResetPwd, setShowResetPwd] = useState(false);
+
+  // Signature viewing state
+  const [sigUrl, setSigUrl] = useState(null);
+  const [sigLoading, setSigLoading] = useState(false);
+  const [sigError, setSigError] = useState('');
+
+  const handleViewSignature = async () => {
+    setSigError(''); setSigUrl(null);
+    if (!result?.patient?.consent_signature_url) return;
+    setSigLoading(true);
+    try {
+      const url = await sb.getSignedSignatureUrl(result.patient.consent_signature_url, 300);
+      if (!url) throw new Error('無法取得簽名連結');
+      setSigUrl(url);
+    } catch (err) {
+      setSigError(err.message || '載入失敗');
+    } finally {
+      setSigLoading(false);
+    }
+  };
+
+  const closeSignature = () => { setSigUrl(null); setSigError(''); };
 
   const handleLookup = async (e) => {
     e.preventDefault();
     const studyId = query.trim();
     if (!studyId) return;
-
-    setLoading(true);
-    setError('');
-    setResult(null);
-
+    setLoading(true); setError(''); setResult(null); setSigUrl(null); setSigError('');
     try {
       if (isDemo) {
         setResult({ demo: true, studyId });
         return;
       }
-
-      // Parallel fetch: patient, reports, alerts
       const [patient, reports, alerts] = await Promise.all([
         sb.getPatient(studyId),
         sb.getAllReports(studyId),
         sb.getAlerts(studyId),
       ]);
-
       const today = new Date().toLocaleDateString('en-CA');
       const todayReport = reports.find(r => r.report_date === today) || null;
       const activeAlerts = alerts.filter(a => !a.acknowledged);
       const latestReport = reports.length > 0 ? reports[0] : null;
-
-      let pod = null;
-      if (patient?.surgery_date) {
-        pod = sb.getPODFromDate(patient.surgery_date);
-      }
-
+      const pod = patient?.surgery_date ? sb.getPODFromDate(patient.surgery_date) : null;
       setResult({
         studyId,
         patientExists: !!patient,
@@ -64,187 +77,265 @@ export default function ResearcherPatientLookup({ onNavigate, isDemo, userInfo, 
     }
   };
 
-  const Row = ({ label, value, warn }) => (
-    <div style={{
-      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      padding: '8px 0', borderBottom: '1px solid var(--border)',
-    }}>
-      <span style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-sm)' }}>{label}</span>
-      <span style={{
-        color: warn ? 'var(--danger)' : 'var(--text-primary)',
-        fontWeight: warn ? 600 : 400,
-        fontSize: 'var(--font-sm)',
-        fontFamily: 'monospace',
-      }}>
-        {String(value)}
-      </span>
-    </div>
-  );
-
   return (
     <div className="page">
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <h1 className="page-title">病人查詢</h1>
-          <p className="page-subtitle">Patient Lookup</p>
-        </div>
-        <button
-          onClick={() => onNavigate('researcherDashboard')}
-          style={{
-            background: 'var(--bg-glass)', border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-sm)', color: 'var(--text-muted)',
-            fontSize: 'var(--font-xs)', padding: '4px 10px', cursor: 'pointer',
-            fontFamily: 'var(--font-family)',
-          }}
-        >
-          ← 返回
+      <div className="topbar">
+        <button className="icon-btn" onClick={() => onNavigate('researcherDashboard')} aria-label="返回">
+          <I.ArrowLeft width={17} height={17} />
         </button>
+        <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--ink-3)', letterSpacing: '0.1em' }}>
+          PATIENT LOOKUP
+        </div>
+        <div style={{ width: 36 }} />
       </div>
 
-      {/* Search */}
-      <div className="card delay-1">
-        <form onSubmit={handleLookup} style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-          <input
-            className="chat-input"
-            style={{ flex: 1 }}
-            placeholder="輸入 Study ID（例如 HEM-001）"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-          />
-          <button className="btn btn-primary" type="submit" disabled={loading}>
-            {loading ? '...' : '查詢'}
-          </button>
-        </form>
+      <div className="page-head">
+        <div className="eyebrow">RESEARCHER TOOLS</div>
+        <h1 className="page-title">病人查詢</h1>
+        <p className="page-sub">輸入 Study ID 查詢病人資料與警示狀況</p>
       </div>
 
-      {/* Error */}
+      <form onSubmit={handleLookup}>
+        <div className="search-box">
+          <I.Search width={14} height={14} />
+          <input placeholder="搜尋病人編號 · e.g. HSF-003"
+            value={query} onChange={e => setQuery(e.target.value)} />
+        </div>
+        <button className="btn btn-primary" type="submit" disabled={loading}>
+          {loading ? '查詢中…' : <>查詢 <I.Chevron width={14} height={14} /></>}
+        </button>
+      </form>
+
       {error && (
-        <div className="alert-banner danger">
-          <span className="alert-icon">⚠️</span>
-          <div className="alert-content">
-            <div className="alert-message">{error}</div>
-          </div>
+        <div className="alert-banner danger" style={{ marginTop: 12 }}>
+          <div className="al-icon"><I.Alert width={18} height={18} /></div>
+          <div><div className="al-msg">{error}</div></div>
         </div>
       )}
 
-      {/* Demo placeholder */}
       {result?.demo && (
-        <div className="card">
-          <p style={{ color: 'var(--text-muted)', textAlign: 'center' }}>
+        <div className="card" style={{ marginTop: 12 }}>
+          <p style={{ color: 'var(--ink-3)', textAlign: 'center', fontSize: 12.5 }}>
             Demo 模式不支援即時查詢
           </p>
         </div>
       )}
 
-      {/* Results */}
       {result && !result.demo && (
         <>
-          {/* Status overview */}
-          <div className="card delay-2">
-            <div className="card-header">
-              <div className="card-icon accent">🔍</div>
-              <div className="card-title">{result.studyId}</div>
+          <div className="card" style={{ marginTop: 12 }}>
+            <div className="eyebrow small">CASE DETAIL</div>
+            <div className="case-head">
+              <div className="case-id">{result.studyId}</div>
+              <div className={`chip chip-${result.activeAlerts > 0 ? 'danger' : result.patientExists ? 'ok' : 'warn'}`}>
+                {!result.patientExists ? '未建檔' : result.activeAlerts > 0 ? '警示' : '穩定'}
+              </div>
             </div>
-
-            <Row label="Patient record" value={result.patientExists ? '✓ exists' : '✗ NOT FOUND'} warn={!result.patientExists} />
-
             {result.patientExists && (
-              <>
-                <Row label="Study status" value={result.patient.study_status || '(null)'} />
-                <Row label="Surgery date" value={result.patient.surgery_date || '(null)'} warn={!result.patient.surgery_date} />
-                <Row label="Surgery type" value={result.patient.surgery_type || '(not set)'} />
-                <Row label="POD" value={result.pod ?? '(unknown)'} />
-                <Row label="Total reports" value={result.totalReports} warn={result.totalReports === 0} />
-                <Row label="Latest report" value={result.latestReportDate || '(none)'} />
-                <Row label="Latest pain NRS" value={result.latestReportPain ?? '(none)'} />
-                <Row label="Today reported" value={result.todayReported ? '✓ yes' : '✗ no'} warn={!result.todayReported} />
-                <Row label="Active alerts" value={result.activeAlerts} warn={result.activeAlerts > 0} />
-              </>
+              <div className="case-grid">
+                <div>
+                  <div className="case-k">Study Status</div>
+                  <div className="case-v">{result.patient.study_status || '—'}</div>
+                </div>
+                <div>
+                  <div className="case-k">Surgery Date</div>
+                  <div className="case-v">{result.patient.surgery_date || '—'}</div>
+                </div>
+                <div>
+                  <div className="case-k">POD</div>
+                  <div className="case-v">{result.pod ?? '—'}</div>
+                </div>
+                <div>
+                  <div className="case-k">術式</div>
+                  <div className="case-v">{result.patient.surgery_type || '—'}</div>
+                </div>
+                <div>
+                  <div className="case-k">Total Reports</div>
+                  <div className="case-v">{result.totalReports}</div>
+                </div>
+                <div>
+                  <div className="case-k">Latest NRS</div>
+                  <div className="case-v">{result.latestReportPain ?? '—'}</div>
+                </div>
+                <div>
+                  <div className="case-k">Today</div>
+                  <div className="case-v">{result.todayReported ? '✓ 已回報' : '✗ 未回報'}</div>
+                </div>
+                <div>
+                  <div className="case-k">Active Alerts</div>
+                  <div className="case-v" style={{ color: result.activeAlerts > 0 ? 'var(--danger)' : undefined }}>
+                    {result.activeAlerts}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Operative record entry */}
+            {result.patientExists && !isDemo && (
+              <div style={{
+                marginTop: 14, paddingTop: 12,
+                borderTop: '1px solid var(--line)',
+              }}>
+                <button className="btn btn-primary"
+                  onClick={() => navigate(`/surgical-record/${result.studyId}`)}>
+                  <I.Edit width={14} height={14} /> 撰寫手術紀錄
+                </button>
+              </div>
+            )}
+
+            {/* Consent signature */}
+            {result.patientExists && result.patient?.consent_signed && (
+              <div style={{
+                marginTop: 14, paddingTop: 12,
+                borderTop: '1px solid var(--line)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+              }}>
+                <div>
+                  <div className="case-k">Consent Signature</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-2)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                    簽署：{result.patient.consent_date ? new Date(result.patient.consent_date).toLocaleDateString('zh-TW') : '—'}
+                  </div>
+                </div>
+                {result.patient.consent_signature_url ? (
+                  <button className="btn btn-secondary" style={{ width: 'auto', padding: '8px 14px' }}
+                    onClick={handleViewSignature} disabled={sigLoading}>
+                    {sigLoading ? '載入中…' : <><I.Eye width={14} height={14} /> 檢視簽名</>}
+                  </button>
+                ) : (
+                  <span style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)' }}>
+                    （無簽名檔）
+                  </span>
+                )}
+              </div>
             )}
           </div>
 
-          {/* Active alerts detail */}
-          {result.alertDetails?.length > 0 && (
-            <div className="card delay-3">
-              <div className="card-header">
-                <div className="card-icon danger">🚨</div>
-                <div className="card-title">未處理警示</div>
+          {sigError && (
+            <div className="alert-banner danger" style={{ marginTop: 10 }}>
+              <div className="al-icon"><I.Alert width={18} height={18} /></div>
+              <div><div className="al-msg">{sigError}</div></div>
+            </div>
+          )}
+
+          {/* Signature modal */}
+          {sigUrl && (
+            <div
+              onClick={closeSignature}
+              style={{
+                position: 'fixed', inset: 0, zIndex: 200,
+                background: 'rgba(0,0,0,0.72)',
+                display: 'grid', placeItems: 'center',
+                padding: 20, animation: 'fadeIn 0.2s ease',
+              }}>
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  maxWidth: '92vw', maxHeight: '92vh',
+                  background: 'var(--surface)', border: '1px solid var(--line)',
+                  borderRadius: 14, padding: 20,
+                  display: 'flex', flexDirection: 'column', gap: 12,
+                }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div className="card-kicker">Signature · {result.studyId}</div>
+                    <div style={{ fontSize: 11, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                      連結 5 分鐘後過期
+                    </div>
+                  </div>
+                  <button type="button" className="icon-btn" onClick={closeSignature} aria-label="關閉">
+                    <I.Close width={16} height={16} />
+                  </button>
+                </div>
+                <img
+                  src={sigUrl}
+                  alt={`${result.studyId} consent signature`}
+                  style={{
+                    background: '#fff', borderRadius: 8,
+                    maxWidth: '100%', maxHeight: '70vh',
+                    objectFit: 'contain', border: '1px solid var(--line)',
+                  }}
+                />
               </div>
+            </div>
+          )}
+
+          {result.alertDetails?.length > 0 && (
+            <>
+              <div className="card-kicker" style={{ margin: '14px 4px 10px' }}>UNACKED ALERTS</div>
               {result.alertDetails.map(a => (
-                <div key={a.id} className={`alert-banner ${a.alert_level}`} style={{ marginBottom: 'var(--space-sm)' }}>
-                  <span className="alert-icon">{a.alert_level === 'danger' ? '🔴' : '🟡'}</span>
-                  <div className="alert-content">
-                    <div className="alert-title">{a.alert_type}</div>
-                    <div className="alert-message">{a.message}</div>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                <div key={a.id} className={`alert-banner ${a.alert_level === 'danger' ? 'danger' : ''}`}>
+                  <div className="al-icon"><I.Alert width={18} height={18} /></div>
+                  <div>
+                    <div className="al-title">{a.alert_type}</div>
+                    <div className="al-msg">{a.message}</div>
+                    <div style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
                       {a.triggered_at}
                     </div>
                   </div>
                 </div>
               ))}
-            </div>
+            </>
           )}
         </>
       )}
 
-      {/* Password Reset Tool */}
       {!isDemo && (
-        <div className="card" style={{ marginTop: 'var(--space-lg)' }}>
-          <div className="card-header">
-            <div className="card-icon warning">🔑</div>
-            <div className="card-title">重設病人密碼</div>
+        <div className="card" style={{ marginTop: 18 }}>
+          <div className="card-head">
+            <div className="card-head-left">
+              <div className="card-icon warn"><I.Shield width={14} height={14} /></div>
+              <div>
+                <div className="card-kicker">Admin Tool</div>
+                <div className="card-title">重設病人密碼</div>
+              </div>
+            </div>
           </div>
-          <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 'var(--space-md)' }}>
+          <p style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 12, lineHeight: 1.55 }}>
             當病人忘記密碼時，研究人員可在此直接重設。
           </p>
-          <div className="form-group">
-            <label className="form-label" style={{ fontSize: 'var(--font-xs)' }}>病人電子郵件</label>
-            <input
-              className="chat-input"
-              style={{ width: '100%' }}
-              type="email"
-              placeholder="patient@example.com"
-              value={resetEmail}
-              onChange={e => setResetEmail(e.target.value)}
-            />
+          <div className="input-group">
+            <label className="input-lbl">病人電子郵件</label>
+            <input className="input" type="email" placeholder="patient@example.com"
+              value={resetEmail} onChange={e => setResetEmail(e.target.value)} />
           </div>
-          <div className="form-group">
-            <label className="form-label" style={{ fontSize: 'var(--font-xs)' }}>新密碼（至少 6 字元）</label>
-            <input
-              className="chat-input"
-              style={{ width: '100%' }}
-              type="text"
-              placeholder="輸入新密碼"
-              value={resetPassword}
-              onChange={e => setResetPassword(e.target.value)}
-              minLength={6}
-            />
+          <div className="input-group">
+            <label className="input-lbl">新密碼 <span style={{ color: 'var(--ink-3)', textTransform: 'none', letterSpacing: 0 }}>(至少 6 字元)</span></label>
+            <div className="input-password-wrap">
+              <input className="input"
+                type={showResetPwd ? 'text' : 'password'}
+                placeholder="輸入新密碼"
+                value={resetPwd}
+                onChange={e => setResetPwd(e.target.value)}
+                minLength={6} />
+              <button type="button" className="input-eye"
+                onClick={() => setShowResetPwd(v => !v)}
+                aria-label={showResetPwd ? '隱藏密碼' : '顯示密碼'}
+                tabIndex={-1}>
+                {showResetPwd ? <I.EyeOff width={18} height={18} /> : <I.Eye width={18} height={18} />}
+              </button>
+            </div>
           </div>
-          <button
-            className="btn btn-primary"
-            style={{ width: '100%' }}
-            disabled={resetLoading || !resetEmail.trim() || resetPassword.length < 6}
+          <button className="btn btn-primary"
+            disabled={resetLoading || !resetEmail.trim() || resetPwd.length < 6}
             onClick={async () => {
-              setResetLoading(true);
-              setResetMsg('');
+              setResetLoading(true); setResetMsg('');
               try {
-                await sb.adminResetPassword(resetEmail.trim(), resetPassword);
+                await sb.adminResetPassword(resetEmail.trim(), resetPwd);
                 setResetMsg('✓ 密碼重設成功');
-                setResetPassword('');
+                setResetPwd('');
               } catch (err) {
                 setResetMsg('✗ ' + (err.message || '重設失敗'));
               } finally {
                 setResetLoading(false);
               }
-            }}
-          >
-            {resetLoading ? '處理中...' : '重設密碼'}
+            }}>
+            {resetLoading ? '處理中…' : '重設密碼'}
           </button>
           {resetMsg && (
             <div style={{
-              marginTop: 'var(--space-sm)', fontSize: 'var(--font-xs)', textAlign: 'center',
-              color: resetMsg.startsWith('✓') ? 'var(--success)' : 'var(--danger)',
+              marginTop: 10, fontSize: 12, textAlign: 'center',
+              color: resetMsg.startsWith('✓') ? 'var(--ok)' : 'var(--danger)',
+              fontFamily: 'var(--font-mono)',
             }}>
               {resetMsg}
             </div>

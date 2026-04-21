@@ -11,27 +11,45 @@ export function useAuth() {
   const [loadingTooLong, setLoadingTooLong] = useState(false);
 
   const loadUserInfo = async (session) => {
-    const studyId = session?.user?.user_metadata?.study_id;
-    const role = session?.user?.user_metadata?.role || 'patient';
-    const surgeryDate = session?.user?.user_metadata?.surgery_date || null;
+    const id = session?.user?.id || null;
+    const email = session?.user?.email || null;
+    // SECURITY: read authorisation claims (role / study_id / surgeon_id)
+    // from app_metadata only — user_metadata is user-writable and forgeable.
+    // surgery_date is display-only and can come from user_metadata safely.
+    const appMeta = session?.user?.app_metadata || {};
+    const userMeta = session?.user?.user_metadata || {};
+    const studyId = appMeta.study_id || userMeta.study_id;
+    // Only trust app_metadata for the role claim; never fall back to
+    // user_metadata.role which a user can set to 'pi'/'researcher' themselves.
+    const role = appMeta.role || 'patient';
+    const surgeonId = appMeta.surgeon_id || null;
+    const surgeryDate = userMeta.surgery_date || null;
+    // Staff accounts (researcher/pi) may not have a study_id — allow them
+    // through so the router can direct them to the researcher dashboard.
+    const isStaff = role === 'researcher' || role === 'pi';
 
-    console.info('[loadUserInfo]', { studyId, role, surgeryDate });
+    console.info('[loadUserInfo]', { id, studyId, role, surgeryDate, surgeonId });
 
-    if (studyId) {
+    if (studyId || isStaff) {
       setUserInfo({
-        studyId,
+        id,
+        email,
+        studyId: studyId || null,
         role,
         surgeryDate,
+        surgeonId,
         pod: surgeryDate ? getPODFromDate(surgeryDate) : 0,
       });
 
       // Fire-and-forget: onboard new patient if invite token exists
-      const inviteToken = sessionStorage.getItem('invite_token');
-      if (inviteToken && role === 'patient') {
-        sessionStorage.removeItem('invite_token');
-        ensurePatient(studyId, inviteToken).catch(e =>
-          console.error('[loadUserInfo] onboard failed:', e)
-        );
+      if (studyId && role === 'patient') {
+        const inviteToken = sessionStorage.getItem('invite_token');
+        if (inviteToken) {
+          sessionStorage.removeItem('invite_token');
+          ensurePatient(studyId, inviteToken).catch(e =>
+            console.error('[loadUserInfo] onboard failed:', e)
+          );
+        }
       }
     }
   };
@@ -99,6 +117,7 @@ export function useAuth() {
         studyId: info.studyId || 'DEMO-001',
         role,
         surgeryDate: null,
+        surgeonId: info.surgeonId || null,
         pod: 0,
       });
       setAuthState('loggedIn');

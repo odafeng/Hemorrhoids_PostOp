@@ -1,23 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import ConsentPage from '../ConsentPage';
 
-// Mock canvas getContext for jsdom
 const mockCtx = {
   scale: vi.fn(),
+  setTransform: vi.fn(),
   beginPath: vi.fn(),
   moveTo: vi.fn(),
   lineTo: vi.fn(),
   stroke: vi.fn(),
   clearRect: vi.fn(),
+  arc: vi.fn(),
+  fill: vi.fn(),
   strokeStyle: '',
+  fillStyle: '',
   lineWidth: 0,
   lineCap: '',
   lineJoin: '',
 };
 HTMLCanvasElement.prototype.getContext = vi.fn(() => mockCtx);
 HTMLCanvasElement.prototype.getBoundingClientRect = vi.fn(() => ({
-  left: 0, top: 0, width: 300, height: 150, right: 300, bottom: 150,
+  left: 0, top: 0, width: 300, height: 140, right: 300, bottom: 140,
 }));
 HTMLCanvasElement.prototype.toDataURL = vi.fn(() => 'data:image/png;base64,fake');
 
@@ -33,104 +36,101 @@ describe('ConsentPage', () => {
   const renderPage = () =>
     render(
       <ConsentPage
-        userInfo={{ name: 'Test User' }}
+        userInfo={{ studyId: 'HSF-003' }}
         onConsent={onConsent}
         onDecline={onDecline}
       />
     );
 
-  // Helper: simulate scrolling to the bottom of the consent text container
   const scrollToBottom = (container) => {
-    const scrollDiv = container.querySelector('[style*="overflow"]');
+    const scrollDiv = container.querySelector('.c-fulltext');
     Object.defineProperty(scrollDiv, 'scrollHeight', { value: 1000, configurable: true });
-    Object.defineProperty(scrollDiv, 'scrollTop', { value: 970, configurable: true });
+    Object.defineProperty(scrollDiv, 'scrollTop', { value: 980, configurable: true });
     Object.defineProperty(scrollDiv, 'clientHeight', { value: 30, configurable: true });
     fireEvent.scroll(scrollDiv);
   };
 
-  it('renders consent title and text', () => {
+  const simulateSignature = (container) => {
+    const canvas = container.querySelector('canvas');
+    // start fires on canvas; move/end now listen on window (fix for scroll-aware drawing)
+    fireEvent.mouseDown(canvas, { clientX: 10, clientY: 10 });
+    fireEvent.mouseMove(window, { clientX: 40, clientY: 30 });
+    fireEvent.mouseUp(window);
+  };
+
+  it('renders consent title and IRB eyebrow', () => {
     renderPage();
-    expect(screen.getByText('研究知情同意書')).toBeInTheDocument();
-    expect(screen.getByText(/痔瘡手術術後 AI 衛教系統之可行性研究/)).toBeInTheDocument();
+    expect(screen.getByText('受試者同意書')).toBeInTheDocument();
+    expect(screen.getByText(/VGHKS · IRB/)).toBeInTheDocument();
+    // Phrase appears in both summary sub + fulltext; getAllByText returns ≥1
+    expect(screen.getAllByText(/結合人工智慧衛教之痔瘡術後數位症狀監測系統/).length).toBeGreaterThan(0);
   });
 
-  it('shows "請滑至最底部以繼續" initially', () => {
+  it('shows scroll hint initially; checkboxes are disabled', () => {
     renderPage();
-    expect(screen.getByText(/請滑至最底部以繼續/)).toBeInTheDocument();
+    expect(screen.getByText(/請滑至.+最底部以解鎖勾選/)).toBeInTheDocument();
+    screen.getAllByRole('checkbox').forEach((cb) => expect(cb).toBeDisabled());
   });
 
-  it('checkbox and next button appear after scroll to bottom', () => {
-    const { container } = renderPage();
-
-    // Before scroll: no checkbox or next button
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-    expect(screen.queryByText('下一步：簽署同意書')).not.toBeInTheDocument();
-
-    scrollToBottom(container);
-
-    // After scroll: checkbox and button should appear
-    expect(screen.getByRole('checkbox')).toBeInTheDocument();
-    expect(screen.getByText('下一步：簽署同意書')).toBeInTheDocument();
-    // Scroll hint should disappear
-    expect(screen.queryByText(/請滑至最底部以繼續/)).not.toBeInTheDocument();
-  });
-
-  it('checkbox is unchecked by default, button disabled', () => {
+  it('scroll-to-bottom enables the four checkboxes', () => {
     const { container } = renderPage();
     scrollToBottom(container);
-
-    const checkbox = screen.getByRole('checkbox');
-    expect(checkbox).not.toBeChecked();
-
-    const nextBtn = screen.getByText('下一步：簽署同意書');
-    expect(nextBtn).toBeDisabled();
+    const checkboxes = screen.getAllByRole('checkbox');
+    expect(checkboxes).toHaveLength(4);
+    checkboxes.forEach((cb) => expect(cb).not.toBeDisabled());
+    expect(screen.queryByText(/請滑至.+最底部以解鎖勾選/)).not.toBeInTheDocument();
   });
 
-  it('checking checkbox enables next button', () => {
+  it('submit button is disabled until scroll + all checks + signature', () => {
     const { container } = renderPage();
+    const submitBtn = screen.getByText(/簽署並開始/);
+    expect(submitBtn).toBeDisabled();
+
     scrollToBottom(container);
+    expect(submitBtn).toBeDisabled();
 
-    const checkbox = screen.getByRole('checkbox');
-    fireEvent.click(checkbox);
+    screen.getAllByRole('checkbox').forEach((cb) => fireEvent.click(cb));
+    expect(submitBtn).toBeDisabled();
 
-    expect(checkbox).toBeChecked();
-    expect(screen.getByText('下一步：簽署同意書')).not.toBeDisabled();
+    simulateSignature(container);
+    expect(submitBtn).not.toBeDisabled();
   });
 
-  it('clicking "暫不簽署，返回登入" calls onDecline', () => {
+  it('clicking 拒絕 calls onDecline', () => {
     renderPage();
-    fireEvent.click(screen.getByText('暫不簽署，返回登入'));
+    fireEvent.click(screen.getByText('拒絕'));
     expect(onDecline).toHaveBeenCalledTimes(1);
   });
 
-  it('clicking next shows signature canvas area', () => {
+  it('clicking 清除重簽 removes the signature and re-disables submit', () => {
     const { container } = renderPage();
     scrollToBottom(container);
+    screen.getAllByRole('checkbox').forEach((cb) => fireEvent.click(cb));
+    simulateSignature(container);
 
-    // Check and click next
-    fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.click(screen.getByText('下一步：簽署同意書'));
+    expect(screen.getByText(/簽署並開始/)).not.toBeDisabled();
 
-    // Signature area should appear
-    expect(screen.getByText('請在下方空白處手寫簽名')).toBeInTheDocument();
-    expect(screen.getByText('清除重簽')).toBeInTheDocument();
-    expect(screen.getByText('確認簽署')).toBeInTheDocument();
-    expect(container.querySelector('canvas')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('清除重簽'));
+    expect(screen.getByText(/簽署並開始/)).toBeDisabled();
   });
 
-  it('"確認簽署" button is disabled without signature', () => {
+  it('submitting calls onConsent with signature dataURL', async () => {
     const { container } = renderPage();
     scrollToBottom(container);
+    screen.getAllByRole('checkbox').forEach((cb) => fireEvent.click(cb));
+    simulateSignature(container);
 
-    fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.click(screen.getByText('下一步：簽署同意書'));
-
-    const submitBtn = screen.getByText('確認簽署');
-    expect(submitBtn).toBeDisabled();
+    fireEvent.click(screen.getByText(/簽署並開始/));
+    expect(onConsent).toHaveBeenCalledWith('data:image/png;base64,fake');
   });
 
-  it('renders institution name "高雄榮民總醫院"', () => {
+  it('renders institution "高雄榮民總醫院" in consent fulltext', () => {
     renderPage();
     expect(screen.getByText(/高雄榮民總醫院/)).toBeInTheDocument();
+  });
+
+  it('shows study ID in signature meta', () => {
+    renderPage();
+    expect(screen.getByText('HSF-003')).toBeInTheDocument();
   });
 });

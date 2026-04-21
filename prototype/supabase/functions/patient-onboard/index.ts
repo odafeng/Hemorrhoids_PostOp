@@ -50,7 +50,11 @@ Deno.serve(async (req: Request) => {
 
     const studyId = user.user_metadata?.study_id;
     const surgeryDate = user.user_metadata?.surgery_date;
-    const role = user.user_metadata?.role || "patient";
+    // SECURITY: this Edge Function only onboards PATIENTS. Ignore any role
+    // the client tried to set in user_metadata — always force 'patient'
+    // when promoting to app_metadata. Researchers/PIs are onboarded via
+    // researcher-invite (PI-only).
+    const role = "patient";
 
     if (!studyId) {
       return new Response(JSON.stringify({ error: "No study_id in user metadata" }), {
@@ -70,6 +74,44 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (existing) {
+      // Defensive re-sync of app_metadata (for returning users whose
+      // patient row was created before the secure-claims migration).
+      // SECURITY: user_metadata.study_id is user-writable — a caller
+      // could set another patient's study_id there and ride the sync
+      // to get app_metadata claims for that victim cohort. Only promote
+      // when we can PROVE the auth user owns this study_id by
+      // matching study_invites.used_by_user_id (server-controlled).
+      const existingSurgeonId = existing.surgeon_id
+        || (studyId.includes("-") ? studyId.split("-")[0].toUpperCase() : null);
+      const { data: ownedInvite } = await adminClient
+        .from("study_invites")
+        .select("id")
+        .eq("study_id", studyId)
+        .eq("used_by_user_id", user.id)
+        .maybeSingle();
+
+      if (ownedInvite) {
+        const needsPromote = !user.app_metadata?.role
+          || !user.app_metadata?.study_id
+          || (existingSurgeonId && !user.app_metadata?.surgeon_id);
+        if (needsPromote) {
+          await adminClient.auth.admin.updateUserById(user.id, {
+            app_metadata: {
+              ...(user.app_metadata || {}),
+              role,
+              study_id: studyId,
+              surgeon_id: existingSurgeonId,
+            },
+          }).catch((e) => console.error("app_metadata sync error:", e));
+        }
+      } else {
+        // No proof of ownership — do NOT trust user_metadata. The existing
+        // patient row exists but this caller didn't claim the invite for
+        // it (or invite record is missing). Skip the promote; if the user
+        // legitimately owns this record but has no invite trail, PI must
+        // manually set app_metadata via the admin dashboard.
+        console.warn("[patient-onboard] existing patient without invite ownership proof; skipping app_metadata sync", { study_id: studyId, user_id: user.id });
+      }
       return new Response(JSON.stringify({ patient: existing }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -140,6 +182,27 @@ Deno.serve(async (req: Request) => {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // SECURITY: promote role / study_id / surgeon_id to app_metadata so RLS
+    // helpers (which read app_metadata) can't be bypassed. This MUST succeed
+    // before we consume the invite token — if it fails, return an error so
+    // the user can retry (the patient row is already created and idempotent;
+    // the next attempt will go through the existing-patient resync path).
+    const { error: promoteErr } = await adminClient.auth.admin.updateUserById(user.id, {
+      app_metadata: {
+        ...(user.app_metadata || {}),
+        role,
+        study_id: studyId,
+        surgeon_id: surgeonId,
+      },
+    });
+    if (promoteErr) {
+      console.error("app_metadata promote error:", promoteErr);
+      return new Response(
+        JSON.stringify({ error: "帳號已建立但權限設定失敗，請重新登入或聯絡管理員" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     // Mark per-patient invite token as used (skip if global token was used)
