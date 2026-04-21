@@ -7,7 +7,6 @@ const password = process.env.E2E_PASSWORD || '';
 const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-// Helper: query Supabase DB directly via REST API (service_role)
 async function querySupabase(table: string, params: string) {
   if (!serviceKey) return null;
   const res = await fetch(`${supabaseUrl}/rest/v1/${table}?${params}`, {
@@ -19,7 +18,6 @@ async function querySupabase(table: string, params: string) {
   return res.json();
 }
 
-// Helper: delete rows from Supabase
 async function deleteSupabase(table: string, params: string) {
   if (!serviceKey) return;
   await fetch(`${supabaseUrl}/rest/v1/${table}?${params}`, {
@@ -37,83 +35,66 @@ test.describe('Auth Mode — Report & AI Chat', () => {
   test.skip(!email || !password, 'E2E_EMAIL / E2E_PASSWORD not set');
 
   test.beforeEach(async ({ page }) => {
-    // Capture console errors for debugging
-    page.on('console', msg => {
+    page.on('console', (msg) => {
       if (msg.type() === 'error') console.log('[BROWSER ERROR]', msg.text());
     });
 
     await page.goto('/');
-    await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10_000 });
     await page.getByPlaceholder('your@email.com').fill(email);
     await page.getByPlaceholder('••••••••').fill(password);
-    await page.locator('form').getByRole('button', { name: '登入' }).click();
-
-    // Wait for either: dashboard loads, OR login error appears, OR loading screen
-    const dashboard = page.getByText('術後天數');
-    const loginError = page.locator('.alert-banner');
-    const loadingScreen = page.getByText('載入中');
+    await page.locator('form button[type="submit"]').click();
 
     // First: make sure we left the login page (form should disappear)
-    await expect(page.getByPlaceholder('your@email.com')).not.toBeVisible({ timeout: 20000 }).catch(async () => {
-      // Still on login page — probably login failed
+    await expect(page.getByPlaceholder('your@email.com')).not.toBeVisible({ timeout: 20_000 }).catch(async () => {
       const bodyText = await page.locator('body').innerText();
       throw new Error(`Login failed — still on login page. Page text: ${bodyText.slice(0, 500)}`);
     });
 
-    // Then wait for dashboard
-    await expect(dashboard).toBeVisible({ timeout: 20000 });
+    // Dashboard ready when pod-hero renders
+    await expect(page.locator('.pod-hero')).toBeVisible({ timeout: 20_000 });
   });
 
   test('Submit symptom report (full form) + verify DB', async ({ page }) => {
-    // Navigate to report
     await page.locator('nav.bottom-nav').getByText('回報').click();
-    await expect(page.getByText('疼痛分數')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('今日症狀回報')).toBeVisible({ timeout: 10_000 });
 
-    // Pain slider
-    const slider = page.locator('input[type="range"]');
-    await slider.fill('4');
+    // Pain slider (inside .pain-hero — specific to avoid matching the field slider)
+    await page.locator('.pain-hero input[type="range"]').fill('4');
 
-    // Bleeding — scope to 出血程度 section
-    const bleedingGroup = page.locator('.form-group').filter({ hasText: '出血程度' });
-    await bleedingGroup.getByRole('button', { name: /少量/ }).click();
+    // Form fields use .field now (was .form-group)
+    const bleedingField = page.locator('.field', { has: page.getByText('出血程度') });
+    await bleedingField.getByRole('button', { name: /少量/ }).click();
 
-    // Bowel — scope to 排便狀況
-    const bowelGroup = page.locator('.form-group').filter({ hasText: '排便狀況' });
-    await bowelGroup.getByRole('button', { name: '正常' }).click();
+    const bowelField = page.locator('.field', { has: page.getByText('排便狀況') });
+    await bowelField.getByRole('button', { name: '正常' }).click();
 
-    // Continence — scope to 肛門控制
-    const continenceGroup = page.locator('.form-group').filter({ hasText: '肛門控制' });
-    await continenceGroup.getByRole('button', { name: /正常/ }).click();
+    const continenceField = page.locator('.field', { has: page.getByText('肛門控制') });
+    await continenceField.getByRole('button', { name: /正常/ }).click();
 
-    // Fever
-    await page.getByRole('button', { name: '否' }).click();
+    const feverField = page.locator('.field', { has: page.getByText(/發燒/) });
+    await feverField.getByRole('button', { name: '否' }).click();
 
-    // Urinary — scope to 排尿狀況
-    const urinaryGroup = page.locator('.form-group').filter({ hasText: '排尿狀況' });
-    await urinaryGroup.getByRole('button', { name: /正常/ }).click();
+    const urinaryField = page.locator('.field', { has: page.getByText('排尿狀況') });
+    await urinaryField.getByRole('button', { name: /正常/ }).click();
 
-    // Wound — toggle behavior, need to ensure it's selected not deselected
-    const woundBtn = page.getByRole('button', { name: '無異常' });
-    const isWoundSelected = await woundBtn.evaluate(el => el.classList.contains('selected'));
+    const woundField = page.locator('.field', { has: page.getByText('傷口狀況') });
+    const woundBtn = woundField.getByRole('button', { name: '無異常' });
+    const isWoundSelected = await woundBtn.evaluate((el) => el.classList.contains('selected'));
     if (!isWoundSelected) await woundBtn.click();
 
-    // Verify submit button is enabled before clicking
-    const submitBtn = page.getByRole('button', { name: '提交回報' });
+    const submitBtn = page.getByRole('button', { name: /提交回報/ });
     await submitBtn.scrollIntoViewIfNeeded();
     await submitBtn.click();
 
-    // Verify success
-    await expect(page.getByText('回報成功')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('回報成功')).toBeVisible({ timeout: 10_000 });
 
-    // Should return to dashboard
-    await expect(page.getByText('術後天數')).toBeVisible({ timeout: 10000 });
+    // Back on dashboard — pod-hero visible
+    await expect(page.locator('.pod-hero')).toBeVisible({ timeout: 10_000 });
+    // Today's card shows the badge "已完成"
+    await expect(page.getByText('已完成今日回報')).toBeVisible();
 
-    // Dashboard should show today's report as completed
-    await expect(page.getByText('✓ 已完成').first()).toBeVisible();
-
-    // ========================================
-    // DB Verification: query Supabase directly
-    // ========================================
+    // DB verification
     if (serviceKey && supabaseUrl) {
       const today = new Date().toLocaleDateString('en-CA');
       const reports = await querySupabase(
@@ -124,7 +105,7 @@ test.describe('Auth Mode — Report & AI Chat', () => {
       expect(reports).toBeTruthy();
       expect(reports.length).toBeGreaterThanOrEqual(1);
 
-      const report = reports[reports.length - 1]; // latest
+      const report = reports[reports.length - 1];
       expect(report.pain_nrs).toBe(4);
       expect(report.bleeding).toBe('少量');
       expect(report.bowel).toBe('正常');
@@ -143,55 +124,41 @@ test.describe('Auth Mode — Report & AI Chat', () => {
   });
 
   test('History shows submitted report data', async ({ page }) => {
-    // Navigate to history
     await page.locator('nav.bottom-nav').getByText('紀錄').click();
-    await expect(page.getByText('歷史紀錄')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('恢復歷程')).toBeVisible({ timeout: 10_000 });
 
-    // Should show at least 1 report
-    await expect(page.getByText(/已完成 \d+ 次回報/)).toBeVisible();
+    // Count format changed: 共 N 次回報 (was 已完成 N 次回報)
+    await expect(page.getByText(/共 \d+ 次回報/)).toBeVisible();
 
-    // Today's report should be in the timeline
     const today = new Date().toLocaleDateString('en-CA');
-    await expect(page.getByText(today)).toBeVisible();
+    await expect(page.getByText(today).first()).toBeVisible();
 
-    // Verify symptom values from the submitted report are displayed
-    // Pain chart should exist if 2+ reports
-    const timeline = page.locator('.timeline');
-    await expect(timeline).toBeVisible();
+    // Timeline items now use .tl-item (template-aligned)
+    const tlItems = page.locator('.tl-item');
+    await expect(tlItems.first()).toBeVisible();
 
-    // The latest timeline item should show symptom data
-    const latestItem = page.locator('.timeline-item').first();
-    await expect(latestItem.getByText(/\/10/)).toBeVisible(); // pain score
-    await expect(latestItem.getByText('出血')).toBeVisible();
-    await expect(latestItem.getByText('排便')).toBeVisible();
-    await expect(latestItem.getByText('發燒')).toBeVisible();
-    await expect(latestItem.getByText('傷口')).toBeVisible();
+    const latest = tlItems.first();
+    await expect(latest.locator('.sym-val .unit').first()).toHaveText('/10');
+    await expect(latest.getByText('出血')).toBeVisible();
+    await expect(latest.getByText('排便')).toBeVisible();
+    await expect(latest.getByText('傷口')).toBeVisible();
   });
 
   test('AI Chat — ask question and get Claude response + verify DB', async ({ page }) => {
-    // Navigate to chat
     await page.locator('nav.bottom-nav').getByText('AI 衛教').click();
-    await expect(page.locator('.chat-bubble.ai').first()).toBeVisible({ timeout: 10000 });
+    // Bubble class renamed: .chat-bubble → .bubble
+    await expect(page.locator('.bubble.ai').first()).toBeVisible({ timeout: 10_000 });
 
-    // Use quick question
     const quickBtn = page.locator('button.quick-q').first();
-    const questionText = await quickBtn.innerText();
     await quickBtn.click();
 
-    // Wait for AI response (real Claude API via Edge Function)
-    // The typing indicator shows first, then the response
-    await expect(page.locator('.chat-bubble.ai').nth(1)).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('.bubble.ai').nth(1)).toBeVisible({ timeout: 30_000 });
 
-    // Verify the response is from Claude (not mock/error)
-    const secondBubble = page.locator('.chat-bubble.ai').nth(1);
-    await expect(secondBubble.locator('.bubble-label')).toContainText('AI 衛教助手');
+    const secondBubble = page.locator('.bubble.ai').nth(1);
+    await expect(secondBubble.locator('.bubble-label')).toContainText(/AI · (Claude Haiku|離線模式)/);
 
-    // Verify disclaimer footer exists
     await expect(secondBubble.getByText('僅供衛教參考')).toBeVisible();
 
-    // ========================================
-    // DB Verification: check ai_chat_logs
-    // ========================================
     if (serviceKey && supabaseUrl) {
       const chatLogs = await querySupabase(
         'ai_chat_logs',
@@ -204,7 +171,7 @@ test.describe('Auth Mode — Report & AI Chat', () => {
       const log = chatLogs[0];
       expect(log.user_message).toBeTruthy();
       expect(log.ai_response).toBeTruthy();
-      expect(log.ai_response.length).toBeGreaterThan(10); // real response, not error
+      expect(log.ai_response.length).toBeGreaterThan(10);
 
       console.log('[DB Verify] ✓ ai_chat_logs row confirmed:', {
         study_id: log.study_id,
@@ -215,14 +182,10 @@ test.describe('Auth Mode — Report & AI Chat', () => {
   });
 
   test('Logout works', async ({ page }) => {
-    await page.getByRole('button', { name: '登出' }).click();
-    await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10000 });
+    await page.getByLabel('登出').click();
+    await expect(page.getByText('術後追蹤系統')).toBeVisible({ timeout: 10_000 });
   });
 
-  // ========================================
-  // Cleanup: remove all E2E test data from DB
-  // Runs last — deletes symptom_reports, ai_chat_logs, alerts for TEST-002
-  // ========================================
   test.afterAll(async () => {
     if (!serviceKey || !supabaseUrl) return;
 

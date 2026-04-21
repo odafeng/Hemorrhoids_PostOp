@@ -49,7 +49,11 @@ test.describe('Researcher — Dashboard & Tools', () => {
   test('Chat review page loads and shows review UI', async ({ page }) => {
     await page.locator('nav.bottom-nav').getByText('審核').click();
     await expect(page.getByText('AI 回覆審核')).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText(/待審核|所有 AI 回覆皆已審核完畢|尚無 AI 回覆紀錄/)).toBeVisible();
+    // Matcher may hit multiple elements (e.g. "待審核 0 則" in page-sub + "所有…已審核完畢"),
+    // so use .first() to satisfy strict mode.
+    await expect(
+      page.getByText(/待審核|所有 AI 回覆皆已審核完畢|尚無 AI 回覆紀錄/).first()
+    ).toBeVisible();
   });
 
   test('Logout works', async ({ page }) => {
