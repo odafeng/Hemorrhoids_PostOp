@@ -10,20 +10,41 @@
 -- =====================================================
 -- 1. Backfill app_metadata for all existing users
 -- =====================================================
--- Copy role / study_id / surgeon_id from user_metadata to app_metadata.
--- app_metadata is NOT user-writable; only service_role (or direct SQL
--- by privileged DB connection) can set it.
+-- SECURITY: Only populate fields that are ABSENT from app_metadata.
+-- CASE…THEN NULL + jsonb_strip_nulls ensures we never overwrite an
+-- existing key, even if an attacker edited user_metadata before deploy.
+-- Overwriting with `||` was the original bug: it would cement
+-- user-controlled values into the trusted claim source used by RLS.
+--
+-- 'role' is whitelisted to the three known values. Any account whose
+-- user_metadata contains an unknown role (e.g. an attempted escalation)
+-- is left with no role in app_metadata and is treated as 'anon' by RLS
+-- until an admin corrects it via the Supabase dashboard.
 UPDATE auth.users u
 SET raw_app_meta_data = COALESCE(u.raw_app_meta_data, '{}'::jsonb)
   || jsonb_strip_nulls(jsonb_build_object(
-      'role',        u.raw_user_meta_data ->> 'role',
-      'study_id',    u.raw_user_meta_data ->> 'study_id',
-      'surgeon_id',  u.raw_user_meta_data ->> 'surgeon_id'
+      'role',
+        CASE
+          WHEN u.raw_app_meta_data ? 'role'                               THEN NULL
+          WHEN u.raw_user_meta_data->>'role' IN ('patient','researcher','pi')
+            THEN u.raw_user_meta_data->>'role'
+          ELSE NULL
+        END,
+      'study_id',
+        CASE
+          WHEN u.raw_app_meta_data ? 'study_id'                           THEN NULL
+          ELSE u.raw_user_meta_data->>'study_id'
+        END,
+      'surgeon_id',
+        CASE
+          WHEN u.raw_app_meta_data ? 'surgeon_id'                         THEN NULL
+          ELSE u.raw_user_meta_data->>'surgeon_id'
+        END
     ))
 WHERE
-  (u.raw_user_meta_data ? 'role')
-  OR (u.raw_user_meta_data ? 'study_id')
-  OR (u.raw_user_meta_data ? 'surgeon_id');
+  (u.raw_user_meta_data ? 'role'       AND NOT u.raw_app_meta_data ? 'role')
+  OR (u.raw_user_meta_data ? 'study_id'   AND NOT u.raw_app_meta_data ? 'study_id')
+  OR (u.raw_user_meta_data ? 'surgeon_id' AND NOT u.raw_app_meta_data ? 'surgeon_id');
 
 -- =====================================================
 -- 2. Flip helpers to read from app_metadata ONLY
