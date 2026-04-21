@@ -1156,10 +1156,12 @@ input[type=range].slider::-moz-range-thumb {
 /* Login */
 .login {
   display: flex; flex-direction: column;
-  padding: 20px 28px 32px;
+  padding: calc(20px + var(--safe-top)) 28px calc(32px + var(--safe-bottom));
   min-height: 100dvh;
   justify-content: center;
   overflow-y: auto;
+  /* Establish positioning context for the absolutely-positioned theme toggle */
+  position: relative;
 }
 .login-logo, .login-logo-img {
   width: 64px; height: 64px;

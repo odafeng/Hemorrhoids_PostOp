@@ -126,7 +126,12 @@ export default function Login({ onLogin, theme, onToggleTheme }) {
           className="icon-btn"
           onClick={onToggleTheme}
           aria-label={theme === 'dark' ? '切換到淺色模式' : '切換到深色模式'}
-          style={{ position: 'absolute', top: 18, right: 18, zIndex: 10 }}
+          style={{
+            position: 'absolute',
+            top: 'calc(18px + env(safe-area-inset-top, 0px))',
+            right: 'calc(18px + env(safe-area-inset-right, 0px))',
+            zIndex: 10,
+          }}
         >
           {theme === 'dark' ? <I.Sun width={16} height={16} /> : <I.Moon width={16} height={16} />}
         </button>
