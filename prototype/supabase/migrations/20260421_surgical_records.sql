@@ -99,49 +99,88 @@ CREATE POLICY "pi_manage_surgical" ON surgical_records FOR ALL
 -- =====================================================
 -- 4. Tighten researcher read policies on existing tables
 --    to scope by surgeon_id. PI policies untouched.
+--
+-- Transition safety: researcher accounts created before this migration
+-- have no surgeon_id in their metadata at all.  For those accounts
+-- get_user_surgeon_id() returns NULL, and a straight equality check
+-- (surgeon_id = NULL) is always FALSE in SQL — locking them out
+-- immediately after deploy.
+--
+-- To avoid that regression, every researcher SELECT policy also allows
+-- access when get_user_surgeon_id() IS NULL (old "read-all" fallback).
+-- Once a PI assigns surgeon_id via researcher-invite / researcher-manage
+-- and the researcher's JWT is refreshed, the scoped check takes over
+-- automatically.  After all researchers have been assigned a surgeon
+-- this NULL branch can be removed in a follow-up migration.
 -- =====================================================
 
 DROP POLICY IF EXISTS "researcher_read_all_patients" ON patients;
 DROP POLICY IF EXISTS "researcher_read_own_surgeon_patients" ON patients;
 CREATE POLICY "researcher_read_own_surgeon_patients" ON patients FOR SELECT
-  USING (get_user_role()='researcher' AND (surgeon_id)::text = get_user_surgeon_id());
+  USING (
+    get_user_role()='researcher'
+    AND (
+      get_user_surgeon_id() IS NULL                       -- unassigned: backward-compat
+      OR (surgeon_id)::text = get_user_surgeon_id()       -- assigned: scoped access
+    )
+  );
 
 DROP POLICY IF EXISTS "researcher_read_reports" ON symptom_reports;
 CREATE POLICY "researcher_read_reports" ON symptom_reports FOR SELECT USING (
-  get_user_role()='researcher' AND EXISTS (
-    SELECT 1 FROM patients p WHERE (p.study_id)::text = (symptom_reports.study_id)::text
-      AND (p.surgeon_id)::text = get_user_surgeon_id()
+  get_user_role()='researcher'
+  AND (
+    get_user_surgeon_id() IS NULL
+    OR EXISTS (
+      SELECT 1 FROM patients p WHERE (p.study_id)::text = (symptom_reports.study_id)::text
+        AND (p.surgeon_id)::text = get_user_surgeon_id()
+    )
   )
 );
 
 DROP POLICY IF EXISTS "researcher_read_chat" ON ai_chat_logs;
 CREATE POLICY "researcher_read_chat" ON ai_chat_logs FOR SELECT USING (
-  get_user_role()='researcher' AND EXISTS (
-    SELECT 1 FROM patients p WHERE (p.study_id)::text = (ai_chat_logs.study_id)::text
-      AND (p.surgeon_id)::text = get_user_surgeon_id()
+  get_user_role()='researcher'
+  AND (
+    get_user_surgeon_id() IS NULL
+    OR EXISTS (
+      SELECT 1 FROM patients p WHERE (p.study_id)::text = (ai_chat_logs.study_id)::text
+        AND (p.surgeon_id)::text = get_user_surgeon_id()
+    )
   )
 );
 
 DROP POLICY IF EXISTS "researcher_review_chat" ON ai_chat_logs;
 CREATE POLICY "researcher_review_chat" ON ai_chat_logs FOR UPDATE USING (
-  get_user_role()='researcher' AND EXISTS (
-    SELECT 1 FROM patients p WHERE (p.study_id)::text = (ai_chat_logs.study_id)::text
-      AND (p.surgeon_id)::text = get_user_surgeon_id()
+  get_user_role()='researcher'
+  AND (
+    get_user_surgeon_id() IS NULL
+    OR EXISTS (
+      SELECT 1 FROM patients p WHERE (p.study_id)::text = (ai_chat_logs.study_id)::text
+        AND (p.surgeon_id)::text = get_user_surgeon_id()
+    )
   )
 );
 
 DROP POLICY IF EXISTS "researcher_read_alerts" ON alerts;
 CREATE POLICY "researcher_read_alerts" ON alerts FOR SELECT USING (
-  get_user_role()='researcher' AND EXISTS (
-    SELECT 1 FROM patients p WHERE (p.study_id)::text = (alerts.study_id)::text
-      AND (p.surgeon_id)::text = get_user_surgeon_id()
+  get_user_role()='researcher'
+  AND (
+    get_user_surgeon_id() IS NULL
+    OR EXISTS (
+      SELECT 1 FROM patients p WHERE (p.study_id)::text = (alerts.study_id)::text
+        AND (p.surgeon_id)::text = get_user_surgeon_id()
+    )
   )
 );
 
 DROP POLICY IF EXISTS "researcher_read_surveys" ON usability_surveys;
 CREATE POLICY "researcher_read_surveys" ON usability_surveys FOR SELECT USING (
-  get_user_role()='researcher' AND EXISTS (
-    SELECT 1 FROM patients p WHERE (p.study_id)::text = (usability_surveys.study_id)::text
-      AND (p.surgeon_id)::text = get_user_surgeon_id()
+  get_user_role()='researcher'
+  AND (
+    get_user_surgeon_id() IS NULL
+    OR EXISTS (
+      SELECT 1 FROM patients p WHERE (p.study_id)::text = (usability_surveys.study_id)::text
+        AND (p.surgeon_id)::text = get_user_surgeon_id()
+    )
   )
 );
