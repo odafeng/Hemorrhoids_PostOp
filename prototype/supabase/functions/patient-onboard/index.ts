@@ -74,22 +74,43 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (existing) {
-      // Defensive: ensure app_metadata is in sync for returning users
-      // whose patient row was created before the secure-claims migration.
+      // Defensive re-sync of app_metadata (for returning users whose
+      // patient row was created before the secure-claims migration).
+      // SECURITY: user_metadata.study_id is user-writable — a caller
+      // could set another patient's study_id there and ride the sync
+      // to get app_metadata claims for that victim cohort. Only promote
+      // when we can PROVE the auth user owns this study_id by
+      // matching study_invites.used_by_user_id (server-controlled).
       const existingSurgeonId = existing.surgeon_id
         || (studyId.includes("-") ? studyId.split("-")[0].toUpperCase() : null);
-      const needsPromote = !user.app_metadata?.role
-        || !user.app_metadata?.study_id
-        || (existingSurgeonId && !user.app_metadata?.surgeon_id);
-      if (needsPromote) {
-        await adminClient.auth.admin.updateUserById(user.id, {
-          app_metadata: {
-            ...(user.app_metadata || {}),
-            role,
-            study_id: studyId,
-            surgeon_id: existingSurgeonId,
-          },
-        }).catch((e) => console.error("app_metadata sync error:", e));
+      const { data: ownedInvite } = await adminClient
+        .from("study_invites")
+        .select("id")
+        .eq("study_id", studyId)
+        .eq("used_by_user_id", user.id)
+        .maybeSingle();
+
+      if (ownedInvite) {
+        const needsPromote = !user.app_metadata?.role
+          || !user.app_metadata?.study_id
+          || (existingSurgeonId && !user.app_metadata?.surgeon_id);
+        if (needsPromote) {
+          await adminClient.auth.admin.updateUserById(user.id, {
+            app_metadata: {
+              ...(user.app_metadata || {}),
+              role,
+              study_id: studyId,
+              surgeon_id: existingSurgeonId,
+            },
+          }).catch((e) => console.error("app_metadata sync error:", e));
+        }
+      } else {
+        // No proof of ownership — do NOT trust user_metadata. The existing
+        // patient row exists but this caller didn't claim the invite for
+        // it (or invite record is missing). Skip the promote; if the user
+        // legitimately owns this record but has no invite trail, PI must
+        // manually set app_metadata via the admin dashboard.
+        console.warn("[patient-onboard] existing patient without invite ownership proof; skipping app_metadata sync", { study_id: studyId, user_id: user.id });
       }
       return new Response(JSON.stringify({ patient: existing }), {
         status: 200,

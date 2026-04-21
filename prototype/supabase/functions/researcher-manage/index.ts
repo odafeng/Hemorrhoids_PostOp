@@ -63,15 +63,21 @@ Deno.serve(async (req: Request) => {
       if (error) throw error;
       const researchers = users
         .filter((u) => {
-          const r = u.user_metadata?.role;
+          // SECURITY: role lives in app_metadata (server-controlled).
+          // Reading from user_metadata would (a) miss newly-invited
+          // researchers whose role was only set in app_metadata, and
+          // (b) surface self-declared roles from user_metadata.
+          const r = u.app_metadata?.role;
           return r === "researcher" || r === "pi";
         })
         .map((u) => ({
           id: u.id,
           email: u.email,
+          // display_name is cosmetic — user_metadata is fine here.
           display_name: u.user_metadata?.display_name || null,
-          role: u.user_metadata?.role,
-          surgeon_id: u.user_metadata?.surgeon_id || null,
+          // role + surgeon_id come from server-controlled app_metadata.
+          role: u.app_metadata?.role,
+          surgeon_id: u.app_metadata?.surgeon_id || null,
           invited_at: u.user_metadata?.invited_at || null,
           created_at: u.created_at,
           last_sign_in_at: u.last_sign_in_at || null,
