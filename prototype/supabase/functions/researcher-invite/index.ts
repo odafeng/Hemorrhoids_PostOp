@@ -45,7 +45,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const callerRole = user.user_metadata?.role;
+    // Read role from app_metadata (server-controlled); user_metadata.role
+    // can be forged by the user themselves.
+    const callerRole = user.app_metadata?.role;
     if (callerRole !== "pi") {
       return new Response(JSON.stringify({ error: "只有主持人（PI）可以邀請研究人員" }), {
         status: 403,
@@ -98,17 +100,33 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Send invitation email with metadata pre-filled
+    // Send invitation email. Only cosmetic / non-security fields go into
+    // user_metadata here (display_name, invited_by). Security-critical
+    // claims (role, surgeon_id) are written to app_metadata below via
+    // updateUserById, which is NOT writable by the user themselves.
     const { data, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
       data: {
-        role,
         display_name: displayName,
-        surgeon_id: surgeonId,
         invited_by: user.id,
         invited_at: new Date().toISOString(),
       },
     });
     if (inviteError) throw inviteError;
+
+    // Set security-critical claims in app_metadata (server-controlled)
+    if (data.user?.id) {
+      const { error: appMetaErr } = await adminClient.auth.admin.updateUserById(
+        data.user.id,
+        { app_metadata: { role, surgeon_id: surgeonId } },
+      );
+      if (appMetaErr) {
+        console.error("researcher-invite app_metadata error:", appMetaErr);
+        return new Response(JSON.stringify({ error: "帳號已建立但權限設定失敗，請聯絡管理員" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     // Audit
     await adminClient.from("audit_trail").insert({

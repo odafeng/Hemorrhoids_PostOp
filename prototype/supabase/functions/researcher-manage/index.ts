@@ -46,7 +46,8 @@ Deno.serve(async (req: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (user.user_metadata?.role !== "pi") {
+    // Read role from app_metadata (user_metadata is user-writable and forgeable).
+    if (user.app_metadata?.role !== "pi") {
       return new Response(JSON.stringify({ error: "只有主持人（PI）可以管理研究人員帳號" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

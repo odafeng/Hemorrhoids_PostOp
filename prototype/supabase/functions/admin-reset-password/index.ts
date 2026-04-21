@@ -46,7 +46,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const callerRole = user.user_metadata?.role;
+    // Read role from app_metadata (server-controlled); user_metadata.role
+    // is user-writable and forgeable.
+    const callerRole = user.app_metadata?.role;
     if (callerRole !== "researcher" && callerRole !== "pi") {
       return new Response(JSON.stringify({ error: "Only researchers/PI can reset passwords" }), {
         status: 403,

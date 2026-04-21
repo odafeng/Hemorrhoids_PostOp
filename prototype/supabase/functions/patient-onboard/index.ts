@@ -50,7 +50,11 @@ Deno.serve(async (req: Request) => {
 
     const studyId = user.user_metadata?.study_id;
     const surgeryDate = user.user_metadata?.surgery_date;
-    const role = user.user_metadata?.role || "patient";
+    // SECURITY: this Edge Function only onboards PATIENTS. Ignore any role
+    // the client tried to set in user_metadata — always force 'patient'
+    // when promoting to app_metadata. Researchers/PIs are onboarded via
+    // researcher-invite (PI-only).
+    const role = "patient";
 
     if (!studyId) {
       return new Response(JSON.stringify({ error: "No study_id in user metadata" }), {
@@ -70,6 +74,23 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (existing) {
+      // Defensive: ensure app_metadata is in sync for returning users
+      // whose patient row was created before the secure-claims migration.
+      const existingSurgeonId = existing.surgeon_id
+        || (studyId.includes("-") ? studyId.split("-")[0].toUpperCase() : null);
+      const needsPromote = !user.app_metadata?.role
+        || !user.app_metadata?.study_id
+        || (existingSurgeonId && !user.app_metadata?.surgeon_id);
+      if (needsPromote) {
+        await adminClient.auth.admin.updateUserById(user.id, {
+          app_metadata: {
+            ...(user.app_metadata || {}),
+            role,
+            study_id: studyId,
+            surgeon_id: existingSurgeonId,
+          },
+        }).catch((e) => console.error("app_metadata sync error:", e));
+      }
       return new Response(JSON.stringify({ patient: existing }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -140,6 +161,23 @@ Deno.serve(async (req: Request) => {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // SECURITY: promote role / study_id / surgeon_id from user_metadata
+    // to app_metadata so RLS helpers (which read app_metadata) can't be
+    // bypassed by the user editing their own metadata (Codex P1 fix).
+    const { error: promoteErr } = await adminClient.auth.admin.updateUserById(user.id, {
+      app_metadata: {
+        ...(user.app_metadata || {}),
+        role,
+        study_id: studyId,
+        surgeon_id: surgeonId,
+      },
+    });
+    if (promoteErr) {
+      console.error("app_metadata promote error:", promoteErr);
+      // Do not fail onboarding — user still has patient row; JWT will pick
+      // up app_metadata on next refresh or they can log out/in.
     }
 
     // Mark per-patient invite token as used (skip if global token was used)

@@ -13,10 +13,16 @@ export function useAuth() {
   const loadUserInfo = async (session) => {
     const id = session?.user?.id || null;
     const email = session?.user?.email || null;
-    const studyId = session?.user?.user_metadata?.study_id;
-    const role = session?.user?.user_metadata?.role || 'patient';
-    const surgeryDate = session?.user?.user_metadata?.surgery_date || null;
-    const surgeonId = session?.user?.user_metadata?.surgeon_id || null;
+    // SECURITY: read authorisation claims (role / study_id / surgeon_id)
+    // from app_metadata — user_metadata is user-writable and forgeable.
+    // Falls back to user_metadata for display-only values (surgery_date)
+    // and for first-login patients whose onboarding hasn't yet promoted.
+    const appMeta = session?.user?.app_metadata || {};
+    const userMeta = session?.user?.user_metadata || {};
+    const studyId = appMeta.study_id || userMeta.study_id;
+    const role = appMeta.role || userMeta.role || 'patient';
+    const surgeonId = appMeta.surgeon_id || null;
+    const surgeryDate = userMeta.surgery_date || null;
 
     console.info('[loadUserInfo]', { id, studyId, role, surgeryDate, surgeonId });
 
