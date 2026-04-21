@@ -15,15 +15,17 @@
 ## 二、研究目的（Objectives）
 
 ### Primary Objective
-建立並評估一套手機應用程式型術後症狀回報與衛教系統之可行性與依從性。
+在痔瘡術後 30 天追蹤情境下，評估病人自述結果（patient-reported outcome, PRO）回報完成率隨術後天數之**衰減曲線（adherence decay curve）**，以描述術後急性期數位健康介入之依從性模式。
+
+本研究聚焦於此一指標，理由為：既有 adherence 文獻多來自慢病或腫瘤追蹤，**外科急性術後（前 30 天）之 PRO adherence decay curve 在文獻中仍缺乏實證數據**；此一參數對後續 RCT 設計（sample size 計算、dropout 估計、回報頻率最佳化）具直接價值。
 
 ### Secondary Objectives
-- 評估系統對非預期門診或急診就醫之影響
-- 評估病人滿意度與衛教理解程度
+- 評估病人滿意度與系統可用性（Likert 問卷）
+- 產生後續 RCT 所需之設計參數：adherence decay parameters、dropout rate
 
 ### Exploratory Objectives
-- 建立術後症狀時間序列資料庫
-- 探索症狀軌跡與術後併發症之關聯性
+- 術後症狀時間序列軌跡描述（NRS / 出血 / 排便 / 傷口）
+- Digital divide 探索：年齡與 adherence 之關聯
 
 ---
 
@@ -36,10 +38,15 @@
 
 本研究為 pilot feasibility study，樣本數設定參考先導型數位健康研究常用規模，目的在估計招募可行性、使用接受度與問卷完成率，並取得後續正式比較研究之參數估計值，因此以 **30–50 例**作為初步目標。
 
-預設可行性門檻如下：
-- App 啟用率 ≥ 80%
-- 問卷整體完成率（adherence rate） ≥ 70%
-- 術後第 0–7 天內至少完成 5 次回報之比例 ≥ 70%
+預設可行性門檻（go / no-go criteria）：
+
+| 項目 | 門檻 | 依據 |
+|------|------|------|
+| App 啟用率（activation rate） | ≥ 80% | 招募可行性基本指標 |
+| POD 7 每日回報完成率 | ≥ 60% | 既有外科術後 PRO 文獻之下限估計 |
+| POD 14 累積完成率 | ≥ 50% | 考量 novelty effect 衰減後之保守估計 |
+
+未達門檻不表示研究失敗，而是作為後續 protocol 修正（回報頻率、提醒策略、UI 優化）之依據。
 
 ### 納入條件
 - 年滿18歲
@@ -158,44 +165,80 @@ AI 模組採用 **Anthropic Claude API**（claude-3-5-haiku 模型），透過 S
 
 ## 五、資料收集與變項（Data Collection）
 
-- 基本資料：年齡、性別、手術方式
-- 每日症狀資料（time-series）
-- 問卷填寫率（adherence）
-- 醫療利用（門診/急診）
-- 病人滿意度（問卷）
+### 病人層級資料
+- 基本資料：年齡、性別、手術方式（hemorrhoidectomy / stapled hemorrhoidopexy / 其他）、手術日期、麻醉方式
+- 每日症狀資料（time-series）：NRS、出血、排便、發燒、傷口狀況
+- App 使用行為：登入時間戳、回報提交時間戳
+- 病人滿意度與可用性問卷（POD 14 或研究結束時）
+
+### Adherence 衍生變項
+- 每日回報完成狀態（binary per POD）
+- 累積回報次數
+- 首次連續 ≥ 3 天未回報之 POD（time-to-dropout event）
+
+### 資料來源表對應
+| 變項類別 | 資料表 |
+|---------|--------|
+| 基本資料 | `patients` |
+| 症狀回報 | `symptom_reports` |
+| 滿意度 | `usability_surveys` |
 
 ---
 
 ## 六、Outcome 定義
 
 ### Primary Outcome
-- 系統可行性（feasibility），包含：
-  - App 啟用率
-  - 問卷填寫率（adherence rate）
-  - 術後第 0–7 天內完成 ≥ 5 次回報之比例
+
+**PRO adherence decay curve**
+
+**主要指標**：每日回報完成率（daily completion rate）隨術後天數（POD 0–30）之衰減曲線
+
+**次指標**：
+- POD 7 每日完成率
+- POD 14 累積完成率
+- 中位「首次連續 3 天未回報」時點（median time-to-dropout）
+- 分層分析：年齡（< 60 / ≥ 60）、手術方式（hemorrhoidectomy / stapled hemorrhoidopexy）、surgeon
+
+**資料來源**：`symptom_reports` 表 × `patients.surgery_date`
+
+**可行性門檻**：POD 7 每日完成率 ≥ 60%；POD 14 累積完成率 ≥ 50%
 
 ### Secondary Outcomes
-- 非預期門診或急診就醫率
-- 病人滿意度與系統可用性評分：於術後第 14 天或研究結束時，以 5-point Likert scale 與簡短 SUS-concept questionnaire 收集，報告中位數與四分位距
+
+- **系統可用性**：5 題 Likert 可用性問卷（ease of use / usefulness / satisfaction / recommend / overall），於 POD 14 或研究結束時收集；報告中位數與四分位距
+- **後續 RCT 參數估計**：adherence decay parameters（供 sample size 計算）、dropout rate
 
 ### Exploratory Outcomes
-- 症狀時間序列軌跡描述
-- 症狀模式與併發症之初步關聯探索
+
+- 術後症狀時間序列個案層級軌跡（NRS、bleeding、bowel frequency、wound status）
+- Digital divide 探索：年齡 vs adherence 之關聯
 
 ---
 
 ## 七、統計分析（Statistical Analysis）
 
-本研究以描述性分析為主：
+本研究以描述性統計為主，不進行正式假說檢定。所有比例估計附 95% 信賴區間（Wilson score interval）。
 
-### 主要分析
-- 描述性統計（descriptive statistics）：報告各可行性指標之比例、中位數及四分位距
-- 症狀時間序列視覺化與描述（symptom trajectory description）
-- 若事件數足夠，進行探索性關聯分析（exploratory association analysis），探索症狀特徵與非預期就醫之關係
+### Primary 分析 — Adherence decay
 
-若樣本數與資料完整度足夠，將進行探索性症狀軌跡分群分析，以作為後續研究假說生成之用。
+- Kaplan-Meier 風格 adherence survival curve，event 定義為「當日未完成回報」
+- 每日完成率時間序列圖（POD 0–30），附 95% CI
+- Median time-to-dropout（Kaplan-Meier 估計）
+- 分層分析：年齡組、手術方式、surgeon
+- Non-parametric 描述：median, IQR
+- **輸出參數**：logistic / exponential decay model 之係數，供後續 RCT sample size 計算使用
 
-> **註**：本研究為 pilot study，統計分析主要目的在描述資料特徵與產生假說，而非進行正式假說檢定。
+### 次要與探索性分析
+
+- 可用性問卷：median, IQR；5 題分別及整體總分
+- 症狀軌跡：個案層級 spaghetti plot + cohort-level median curve
+- 年齡 vs adherence：分層描述 + 探索性 correlation（Spearman）
+
+### 分析工具
+- R（survival, ggplot2）或 Python（lifelines, matplotlib）
+- 所有分析程式碼納入 Git 版本控制，確保可重現性
+
+> **註**：本研究為 pilot feasibility study，統計目的在於**估計參數、描述現象、產生假說**，而非進行正式假說檢定。所有門檻（go / no-go criteria）於 protocol 中預先登錄，以避免 post-hoc 調整。
 
 ---
 
