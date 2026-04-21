@@ -153,6 +153,31 @@ export default function App() {
     );
   }
 
+  // Onboarding state — ensurePatient + session refresh in progress
+  if (authState === 'onboarding') {
+    return (
+      <div className="page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh' }}>
+        <div style={{ textAlign: 'center', maxWidth: 320, padding: 'var(--space-md)' }}>
+          <img
+            src="/KSVGH.png"
+            alt=""
+            style={{
+              width: '60px', height: '60px', objectFit: 'contain',
+              marginBottom: 'var(--space-md)', animation: 'pulse 1s infinite',
+              borderRadius: '50%',
+            }}
+          />
+          <h2 style={{ fontSize: 'var(--font-md)', marginBottom: 'var(--space-sm)', fontWeight: 600 }}>
+            設定帳號中…
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-xs)', lineHeight: 1.6 }}>
+            正在完成病人資料同步與權限設定，<br />請稍候（通常不到 5 秒）。
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // Loading state
   if (authState === 'loading') {
     return (

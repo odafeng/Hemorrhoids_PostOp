@@ -5,20 +5,23 @@ import supabase from './supabaseClient';
 import { seedDemoData } from './storage';
 
 export function useAuth() {
-  const [authState, setAuthState] = useState('loading'); // 'loading' | 'loggedIn' | 'loggedOut'
+  const [authState, setAuthState] = useState('loading'); // 'loading' | 'onboarding' | 'loggedIn' | 'loggedOut'
   const [isDemo, setIsDemo] = useState(false);
   const [userInfo, setUserInfo] = useState(null);
   const [loadingTooLong, setLoadingTooLong] = useState(false);
 
-  const loadUserInfo = async (session) => {
-    const id = session?.user?.id || null;
-    const email = session?.user?.email || null;
+  const loadUserInfo = async (session, { attemptedSelfHeal = false } = {}) => {
+    const user = session?.user;
+    const id = user?.id || null;
+    const email = user?.email || null;
     // SECURITY: read authorisation claims (role / study_id / surgeon_id)
     // from app_metadata only — user_metadata is user-writable and forgeable.
     // surgery_date is display-only and can come from user_metadata safely.
-    const appMeta = session?.user?.app_metadata || {};
-    const userMeta = session?.user?.user_metadata || {};
-    const studyId = appMeta.study_id || userMeta.study_id;
+    const appMeta = user?.app_metadata || {};
+    const userMeta = user?.user_metadata || {};
+    const appStudyId = appMeta.study_id;
+    const userStudyId = userMeta.study_id;
+    const studyId = appStudyId || userStudyId;
     // Only trust app_metadata for the role claim; never fall back to
     // user_metadata.role which a user can set to 'pi'/'researcher' themselves.
     const role = appMeta.role || 'patient';
@@ -27,6 +30,48 @@ export function useAuth() {
     // Staff accounts (researcher/pi) may not have a study_id — allow them
     // through so the router can direct them to the researcher dashboard.
     const isStaff = role === 'researcher' || role === 'pi';
+    const inviteToken = typeof window !== 'undefined'
+      ? sessionStorage.getItem('invite_token')
+      : null;
+
+    // Self-heal / onboarding path — fires when a patient lands here with
+    //  (a) an invite_token pending (classic first-signup flow), OR
+    //  (b) user_metadata.study_id present but app_metadata.study_id missing.
+    // Both cases mean the JWT we're holding will fail every RLS check bound
+    // to get_user_study_id() (patients, reports, chat, etc.), so the dashboard
+    // would render MISSING_PATIENT until the user manually logs out and back in.
+    //
+    // Fix: show a dedicated "onboarding" state, call ensurePatient (which
+    // creates the patients row and promotes app_metadata via the patient-onboard
+    // Edge Function), then refresh the session so the new JWT picks up the
+    // promoted claims. Recurse once with attemptedSelfHeal=true to avoid loops.
+    const needsOnboarding = !attemptedSelfHeal
+      && role === 'patient'
+      && !!userStudyId
+      && (!appStudyId || !!inviteToken);
+
+    if (needsOnboarding) {
+      console.info('[loadUserInfo] onboarding/self-heal', {
+        hasInvite: !!inviteToken,
+        appMetaDrift: !appStudyId,
+      });
+      setAuthState('onboarding');
+      try {
+        if (inviteToken) sessionStorage.removeItem('invite_token');
+        await ensurePatient(userStudyId, inviteToken);
+        const { data: { session: fresh }, error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) throw refreshError;
+        if (fresh) {
+          // Re-run with fresh session (which should now carry promoted
+          // app_metadata.study_id). attemptedSelfHeal flag prevents recursion.
+          return loadUserInfo(fresh, { attemptedSelfHeal: true });
+        }
+      } catch (err) {
+        console.error('[loadUserInfo] self-heal failed, falling through:', err);
+        // Fall through to normal setUserInfo below — dashboard will show
+        // MISSING_PATIENT and the user can fall back to manual logout+login.
+      }
+    }
 
     console.info('[loadUserInfo]', { id, studyId, role, surgeryDate, surgeonId });
 
@@ -40,17 +85,6 @@ export function useAuth() {
         surgeonId,
         pod: surgeryDate ? getPODFromDate(surgeryDate) : 0,
       });
-
-      // Fire-and-forget: onboard new patient if invite token exists
-      if (studyId && role === 'patient') {
-        const inviteToken = sessionStorage.getItem('invite_token');
-        if (inviteToken) {
-          sessionStorage.removeItem('invite_token');
-          ensurePatient(studyId, inviteToken).catch(e =>
-            console.error('[loadUserInfo] onboard failed:', e)
-          );
-        }
-      }
     }
   };
 
@@ -78,7 +112,7 @@ export function useAuth() {
             if (freshStudyId && freshStudyId !== cachedStudyId) {
               console.warn('[checkAuth] Metadata drift detected, refreshing');
               const freshSession = { ...session, user: { ...session.user, user_metadata: user.user_metadata } };
-              await loadUserInfo(freshSession);
+              await loadUserInfo(freshSession, { attemptedSelfHeal: true });
             }
           }
         } catch (e) {
