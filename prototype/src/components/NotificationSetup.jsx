@@ -27,6 +27,8 @@ export default function NotificationSetup({ studyId, isDemo }) {
   const [time, setTime] = useState(getReminderTime());
   const [justEnabled, setJustEnabled] = useState(false);
   const [pushStatus, setPushStatus] = useState(''); // '', 'subscribing', 'subscribed', 'error'
+  const [testStatus, setTestStatus] = useState(''); // '' | 'countdown' | 'fired' | 'failed' | 'denied'
+  const [countdown, setCountdown] = useState(0);
 
   // On mount: load server prefs + check existing push subscription
   useEffect(() => {
@@ -132,15 +134,29 @@ export default function NotificationSetup({ studyId, isDemo }) {
     }
   };
 
-  const handleTimeChange = (e) => {
-    const [h, m] = e.target.value.split(':').map(Number);
-    setReminderTime(h, m);
-    setTime({ hour: h, minute: m });
-    syncToServer(enabled, h, m);
-  };
+  const handleTestNotification = async () => {
+    if (testStatus === 'countdown') return; // ignore double-tap
+    if (permission !== 'granted') {
+      setTestStatus('denied');
+      setTimeout(() => setTestStatus(''), 4000);
+      return;
+    }
 
-  const handleTestNotification = () => {
-    showReminderNotification();
+    setTestStatus('countdown');
+    // Count down 3 → 2 → 1 so the user knows when to switch to background.
+    for (let n = 3; n > 0; n--) {
+      setCountdown(n);
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    setCountdown(0);
+
+    const result = await showReminderNotification();
+    if (result?.fired) {
+      setTestStatus('fired');
+    } else {
+      setTestStatus('failed');
+    }
+    setTimeout(() => setTestStatus(''), 5000);
   };
 
   const timeValue = `${String(time.hour).padStart(2, '0')}:${String(time.minute).padStart(2, '0')}`;
@@ -199,18 +215,81 @@ export default function NotificationSetup({ studyId, isDemo }) {
       {enabled && (
         <div className="notif-settings">
           <div className="notif-time-row">
-            <label htmlFor="reminder-time" className="notif-time-label">提醒時間</label>
-            <input
-              id="reminder-time"
-              type="time"
-              className="notif-time-input"
-              value={timeValue}
-              onChange={handleTimeChange}
-            />
+            <label htmlFor="reminder-hour" className="notif-time-label">提醒時間</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <select
+                id="reminder-hour"
+                className="notif-time-input"
+                value={time.hour}
+                onChange={(e) => {
+                  const h = Number(e.target.value);
+                  setReminderTime(h, time.minute);
+                  setTime({ hour: h, minute: time.minute });
+                  syncToServer(enabled, h, time.minute);
+                }}
+                style={{ minWidth: 64 }}
+                aria-label="提醒小時 (24 小時制)"
+              >
+                {Array.from({ length: 24 }, (_, i) => (
+                  <option key={i} value={i}>
+                    {String(i).padStart(2, '0')}
+                  </option>
+                ))}
+              </select>
+              <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>:</span>
+              <select
+                className="notif-time-input"
+                value={time.minute}
+                onChange={(e) => {
+                  const m = Number(e.target.value);
+                  setReminderTime(time.hour, m);
+                  setTime({ hour: time.hour, minute: m });
+                  syncToServer(enabled, time.hour, m);
+                }}
+                style={{ minWidth: 64 }}
+                aria-label="提醒分鐘"
+              >
+                {[0, 15, 30, 45].map((m) => (
+                  <option key={m} value={m}>
+                    {String(m).padStart(2, '0')}
+                  </option>
+                ))}
+              </select>
+              <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginLeft: 4 }}>
+                24h
+              </span>
+            </div>
           </div>
-          <button className="btn btn-secondary notif-test-btn" onClick={handleTestNotification}>
-            🔔 測試通知
+          <button
+            className="btn btn-secondary notif-test-btn"
+            onClick={handleTestNotification}
+            disabled={testStatus === 'countdown'}
+          >
+            {testStatus === 'countdown'
+              ? `⏳ ${countdown} 秒後發送，請切到背景…`
+              : '🔔 測試通知'}
           </button>
+          {testStatus === 'countdown' && (
+            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--warning)', marginTop: 6, lineHeight: 1.4 }}>
+              💡 Android 的 PWA 在前景時只會顯示 in-app 橫幅（不震動、不進通知列）。
+              按 Home 鍵將 App 切到背景後，才會看到完整的系統通知 + 震動。
+            </div>
+          )}
+          {testStatus === 'fired' && (
+            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--success)', marginTop: 6 }}>
+              ✓ 測試通知已發送。若在前景只會看到橫幅，請切到背景測試完整效果。
+            </div>
+          )}
+          {testStatus === 'denied' && (
+            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--warning)', marginTop: 6, lineHeight: 1.4 }}>
+              ⚠ 通知權限未授權。請先開啟上方每日提醒開關並允許通知權限。
+            </div>
+          )}
+          {testStatus === 'failed' && (
+            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--danger)', marginTop: 6 }}>
+              ✗ 測試通知發送失敗，請檢查系統通知權限設定。
+            </div>
+          )}
           {justEnabled && (
             <div style={{
               fontSize: 'var(--font-xs)',

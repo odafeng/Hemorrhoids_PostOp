@@ -90,31 +90,48 @@ export function setReminderTime(hour, minute) {
 /**
  * Show a reminder notification via Service Worker
  */
+/**
+ * Show a reminder notification via Service Worker.
+ * Returns { fired: boolean, reason?: string } so callers can surface UX feedback
+ * when firing fails (previously silent-returned on permission denied).
+ */
 export async function showReminderNotification() {
-  if (getNotificationStatus() !== 'granted') return;
+  const status = getNotificationStatus();
+  if (status === 'unsupported') return { fired: false, reason: 'unsupported' };
+  if (status === 'denied')      return { fired: false, reason: 'denied' };
+  if (status !== 'granted')     return { fired: false, reason: 'not-granted' };
+
+  const opts = {
+    body: '您今日尚未填寫症狀回報，請花 30 秒完成填寫。',
+    icon: '/icon.svg',
+    badge: '/favicon.svg',
+    tag: 'daily-reminder',      // deduplicate — only one at a time
+    renotify: true,
+    vibrate: [200, 100, 200],   // Android heads-up won't vibrate without explicit pattern
+    data: { action: 'open-report' },
+    actions: [
+      { action: 'report',  title: '立即填寫' },
+      { action: 'dismiss', title: '稍後' },
+    ],
+  };
 
   try {
     const reg = await navigator.serviceWorker.ready;
-    await reg.showNotification('術後追蹤提醒 🏥', {
-      body: '您今日尚未填寫症狀回報，請花 30 秒完成填寫。',
-      icon: '/icon.svg',
-      badge: '/favicon.svg',
-      tag: 'daily-reminder', // deduplicate — only one at a time
-      renotify: true,
-      data: { action: 'open-report' },
-      actions: [
-        { action: 'report', title: '立即填寫' },
-        { action: 'dismiss', title: '稍後' },
-      ],
-    });
+    await reg.showNotification('術後追蹤提醒 🏥', opts);
+    return { fired: true };
   } catch (err) {
-    // Fallback: direct Notification (no SW actions support)
+    // Fallback: direct Notification (no SW actions / vibrate support)
     console.warn('SW notification failed, using fallback:', err);
-    new Notification('術後追蹤提醒 🏥', {
-      body: '您今日尚未填寫症狀回報，請花 30 秒完成填寫。',
-      icon: '/icon.svg',
-      tag: 'daily-reminder',
-    });
+    try {
+      new Notification('術後追蹤提醒 🏥', {
+        body: opts.body,
+        icon: opts.icon,
+        tag: opts.tag,
+      });
+      return { fired: true, reason: 'fallback' };
+    } catch (e2) {
+      return { fired: false, reason: 'error' };
+    }
   }
 }
 

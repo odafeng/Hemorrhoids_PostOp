@@ -138,24 +138,34 @@ describe('NotificationSetup', () => {
 
     render(<NotificationSetup {...defaultProps} />);
 
-    const timeInput = screen.getByLabelText('提醒時間');
-    if (timeInput) {
-      fireEvent.change(timeInput, { target: { value: '08:30' } });
-      expect(notif.setReminderTime).toHaveBeenCalledWith(8, 30);
-    }
+    // Samsung fix: UI now has separate hour + minute <select>, not a single time input.
+    const hourSelect = screen.getByLabelText('提醒時間');
+    fireEvent.change(hourSelect, { target: { value: '8' } });
+    expect(notif.setReminderTime).toHaveBeenCalledWith(8, 0);
+
+    const minuteSelect = screen.getByLabelText('提醒分鐘');
+    fireEvent.change(minuteSelect, { target: { value: '30' } });
+    expect(notif.setReminderTime).toHaveBeenCalledWith(8, 30);
   });
 
   it('test notification button calls showReminderNotification', async () => {
-    const notif = await import('../../utils/notifications');
-    notif.isNotificationsEnabled.mockReturnValue(true);
-    notif.getNotificationStatus.mockReturnValue('granted');
+    vi.useFakeTimers();
+    try {
+      const notif = await import('../../utils/notifications');
+      notif.isNotificationsEnabled.mockReturnValue(true);
+      notif.getNotificationStatus.mockReturnValue('granted');
+      notif.showReminderNotification.mockResolvedValue({ fired: true });
 
-    render(<NotificationSetup {...defaultProps} />);
+      render(<NotificationSetup {...defaultProps} />);
 
-    const testBtn = screen.getByText(/測試通知/);
-    if (testBtn) {
+      const testBtn = screen.getByText(/測試通知/);
       fireEvent.click(testBtn);
+
+      // Button now has a 3-second countdown before firing. Advance through it.
+      await vi.advanceTimersByTimeAsync(3100);
       expect(notif.showReminderNotification).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
     }
   });
 
