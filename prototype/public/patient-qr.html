@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>痔瘡術後衛教 APP · 病人掃碼啟用</title>
+<style>
+  @page { size: A4 portrait; margin: 12mm; }
+  :root {
+    --ink-0:#0b0c10; --ink-1:#1f2937; --ink-2:#4b5563; --ink-3:#9ca3af;
+    --bg:#ffffff; --line:#111;
+  }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { margin: 0; padding: 0; background: #f3f4f6; color: var(--ink-0);
+    font-family: "IBM Plex Sans TC", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    -webkit-font-smoothing: antialiased; }
+  .sheet {
+    width: 186mm; min-height: 273mm;
+    margin: 16px auto; padding: 18mm 16mm;
+    background: var(--bg); color: var(--ink-0);
+    border: 1.5px solid var(--line);
+    display: flex; flex-direction: column; gap: 14mm;
+  }
+  .eyebrow { font-size: 11px; letter-spacing: .18em; color: var(--ink-2);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; text-transform: uppercase; }
+  header { display: flex; align-items: flex-start; justify-content: space-between;
+    border-bottom: 1.5px solid var(--line); padding-bottom: 8mm; }
+  h1 { font-size: 28px; margin: 6px 0 4px; font-weight: 700; letter-spacing: -.01em; }
+  .subtitle { color: var(--ink-2); font-size: 14px; }
+  .brand { text-align: right; font-size: 11px; color: var(--ink-2);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; line-height: 1.55; }
+
+  .qr-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .qr {
+    width: 82mm; height: 82mm; padding: 8mm;
+    border: 1.5px solid var(--line); background: #fff;
+  }
+  .qr svg { width: 100%; height: 100%; display: block; }
+  .url { font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13px; color: var(--ink-1); letter-spacing: 0;
+    padding: 6px 10px; background: #f9fafb; border: 1px solid #e5e7eb; }
+
+  .steps {
+    border-top: 1.5px dashed var(--line); border-bottom: 1.5px dashed var(--line);
+    padding: 8mm 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10mm;
+  }
+  .step { text-align: center; }
+  .step-n {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border: 1.5px solid var(--line); border-radius: 50%;
+    font-weight: 700; font-size: 16px; margin-bottom: 8px;
+  }
+  .step-t { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .step-d { font-size: 12px; color: var(--ink-2); line-height: 1.55; }
+
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10mm; font-size: 12px; }
+  .info h3 { font-size: 11px; letter-spacing: .15em; color: var(--ink-2);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; margin: 0 0 6px;
+    text-transform: uppercase; border-bottom: 1px solid #d1d5db; padding-bottom: 4px; }
+  .info p { margin: 0 0 4px; color: var(--ink-1); line-height: 1.6; }
+  .info .muted { color: var(--ink-2); }
+  .info code { font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    background: #f3f4f6; padding: 1px 6px; font-size: 11.5px; }
+
+  footer {
+    margin-top: auto;
+    border-top: 1.5px solid var(--line); padding-top: 6mm;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    font-size: 10.5px; color: var(--ink-2);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .05em;
+  }
+  .footer-left { line-height: 1.7; }
+  .footer-right { text-align: right; line-height: 1.7; }
+
+  .print-btn {
+    position: fixed; top: 16px; right: 16px;
+    padding: 10px 18px; background: #111; color: #fff; border: none;
+    font-family: inherit; font-size: 13px; font-weight: 600; letter-spacing: .05em;
+    cursor: pointer; border-radius: 2px;
+  }
+  @media print {
+    body { background: #fff; }
+    .sheet { margin: 0; border: none; padding: 0; width: auto; min-height: auto; }
+    .print-btn { display: none; }
+  }
+</style>
+</head>
+<body>
+<button class="print-btn" onclick="window.print()">列印 / 儲存為 PDF</button>
+
+<div class="sheet">
+  <header>
+    <div>
+      <div class="eyebrow">Post-operative care · Enrollment</div>
+      <h1>痔瘡術後 AI 衛教</h1>
+      <div class="subtitle">請用手機相機掃描下方 QR code，開始使用</div>
+    </div>
+    <div class="brand">
+      KSVGH · 高雄榮總<br>
+      大腸直腸外科<br>
+      黃士峯醫師 研究計畫
+    </div>
+  </header>
+
+  <section class="qr-wrap">
+    <div class="qr">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 37 37" shape-rendering="crispEdges"><path fill="#ffffff" d="M0 0h37v37H0z"/><path stroke="#000000" d="M0 0.5h7m3 0h1m6 0h1m2 0h1m1 0h1m7 0h7M0 1.5h1m5 0h1m1 0h3m1 0h2m2 0h1m2 0h2m2 0h1m1 0h2m1 0h1m1 0h1m5 0h1M0 2.5h1m1 0h3m1 0h1m1 0h2m1 0h4m1 0h4m1 0h1m3 0h3m2 0h1m1 0h3m1 0h1M0 3.5h1m1 0h3m1 0h1m1 0h1m3 0h1m1 0h2m2 0h1m1 0h1m2 0h1m1 0h3m2 0h1m1 0h3m1 0h1M0 4.5h1m1 0h3m1 0h1m1 0h2m1 0h1m1 0h1m2 0h1m4 0h2m1 0h1m3 0h1m1 0h1m1 0h3m1 0h1M0 5.5h1m5 0h1m1 0h1m3 0h1m2 0h4m3 0h2m1 0h2m1 0h1m1 0h1m5 0h1M0 6.5h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7M9 7.5h2m3 0h1m2 0h1m3 0h2m2 0h1m1 0h2M2 8.5h1m2 0h6m2 0h1m1 0h4m1 0h1m1 0h4m2 0h2m1 0h5M0 9.5h1m4 0h1m3 0h1m1 0h1m8 0h1m1 0h4m3 0h3m1 0h1m2 0h1M0 10.5h3m1 0h3m1 0h2m2 0h7m1 0h1m1 0h1m4 0h1m1 0h2m1 0h1m1 0h3M0 11.5h1m4 0h1m1 0h1m1 0h1m1 0h1m3 0h2m2 0h3m2 0h1m1 0h3m4 0h1m1 0h1M1 12.5h2m1 0h4m1 0h3m1 0h1m1 0h1m1 0h3m3 0h1m4 0h1m1 0h2m1 0h1m1 0h2M0 13.5h1m2 0h3m2 0h2m4 0h1m1 0h4m3 0h1m1 0h3m1 0h3m2 0h3M0 14.5h1m1 0h1m1 0h1m1 0h2m6 0h1m1 0h4m1 0h1m1 0h1m2 0h2m1 0h1m1 0h4m1 0h1M1 15.5h1m2 0h1m4 0h1m2 0h1m2 0h1m1 0h1m4 0h3m2 0h1m1 0h1m1 0h3m1 0h2M0 16.5h1m1 0h1m3 0h5m2 0h1m1 0h1m1 0h1m1 0h1m2 0h1m5 0h1m1 0h1M4 17.5h2m5 0h2m1 0h2m1 0h1m1 0h3m1 0h1m3 0h1m1 0h3m1 0h1m2 0h1M1 18.5h3m1 0h3m2 0h2m2 0h1m1 0h1m2 0h1m3 0h2m2 0h1m1 0h6m1 0h1M2 19.5h1m1 0h2m1 0h1m1 0h1m1 0h1m6 0h5m5 0h2m1 0h1m1 0h1M0 20.5h1m1 0h2m2 0h3m2 0h2m2 0h1m1 0h2m2 0h1m2 0h1m2 0h2m1 0h1m2 0h1m1 0h1M1 21.5h1m1 0h2m2 0h8m9 0h1m2 0h1m2 0h2m1 0h2m1 0h1M0 22.5h2m3 0h7m1 0h4m4 0h1m3 0h8m1 0h1m1 0h1M1 23.5h3m4 0h6m3 0h6m1 0h1m1 0h2m3 0h1m1 0h1m1 0h2M0 24.5h2m4 0h1m5 0h2m2 0h7m2 0h2m1 0h1m1 0h2m1 0h1m1 0h2M1 25.5h2m5 0h3m1 0h1m1 0h1m3 0h3m1 0h1m3 0h2m1 0h3m1 0h2m1 0h1M0 26.5h2m1 0h5m3 0h1m1 0h1m2 0h2m1 0h1m3 0h1m1 0h7m1 0h2m1 0h1M2 27.5h1m4 0h1m1 0h2m1 0h5m3 0h2m7 0h4M0 28.5h2m3 0h2m1 0h1m1 0h2m2 0h2m3 0h3m1 0h2m2 0h7m2 0h1M8 29.5h2m2 0h2m2 0h3m4 0h2m1 0h1m1 0h1m3 0h2m2 0h1M0 30.5h7m1 0h1m2 0h3m2 0h1m3 0h6m2 0h1m1 0h1m1 0h3m1 0h1M0 31.5h1m5 0h1m1 0h7m3 0h1m1 0h4m2 0h3m3 0h2m2 0h1M0 32.5h1m1 0h3m1 0h1m3 0h3m1 0h2m1 0h1m2 0h1m1 0h3m2 0h6m2 0h2M0 33.5h1m1 0h3m1 0h1m2 0h1m1 0h1m2 0h1m2 0h3m4 0h1m1 0h3m3 0h3m1 0h1M0 34.5h1m1 0h3m1 0h1m1 0h2m1 0h2m4 0h1m3 0h1m2 0h2m1 0h2m3 0h1m2 0h2M0 35.5h1m5 0h1m2 0h1m2 0h1m1 0h2m1 0h2m4 0h2m1 0h1m1 0h1m3 0h2M0 36.5h7m4 0h3m1 0h4m1 0h2m6 0h5m3 0h1"/></svg>
+    </div>
+    <div class="url">https://prototype-zeta-black.vercel.app/</div>
+  </section>
+
+  <section class="steps">
+    <div class="step">
+      <div class="step-n">1</div>
+      <div class="step-t">開啟相機</div>
+      <div class="step-d">用手機相機對準 QR code，點擊跳出的網址連結</div>
+    </div>
+    <div class="step">
+      <div class="step-n">2</div>
+      <div class="step-t">輸入邀請碼</div>
+      <div class="step-d">輸入醫護人員給您的 6 位英文邀請碼（例：ABCDEF）</div>
+    </div>
+    <div class="step">
+      <div class="step-n">3</div>
+      <div class="step-t">簽署同意書</div>
+      <div class="step-d">閱讀受試者同意書並以手指簽名</div>
+    </div>
+    <div class="step">
+      <div class="step-n">4</div>
+      <div class="step-t">開始紀錄</div>
+      <div class="step-d">每日回報疼痛、排便、出血狀況；有問題隨時問 AI</div>
+    </div>
+  </section>
+
+  <section class="info-grid">
+    <div class="info">
+      <h3>※ 什麼是這個 APP？</h3>
+      <p>這是高雄榮總大腸直腸外科開發的「痔瘡術後追蹤 AI 衛教系統」。</p>
+      <p class="muted">協助您在術後 14 天內，隨時紀錄症狀、取得衛教資訊、並在異常徵兆出現時立即通知醫療團隊。</p>
+    </div>
+    <div class="info">
+      <h3>※ 聯絡窗口</h3>
+      <p>主持人：<strong>黃士峯醫師</strong></p>
+      <p>聯絡電話：<code>0975-581-005</code></p>
+      <p class="muted">若您在使用 APP 或術後照護上遇到任何問題，歡迎隨時來電詢問。</p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="footer-left">
+      KSVGH — Kaohsiung Veterans General Hospital<br>
+      Division of Colon &amp; Rectal Surgery
+    </div>
+    <div class="footer-right">
+      Hemorrhoids_PostOp Study v1.0<br>
+      IRB approved · 2026
+    </div>
+  </footer>
+</div>
+</body>
+</html>
