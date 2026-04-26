@@ -14,3 +14,12 @@ IRB/
 .env.*.local
 prototype/.env
 prototype/.env.local
+
+# R session files
+.Rhistory
+.RData
+.Rproj.user/
+
+# Personal documents
+CV_*.docx
+STATUS
